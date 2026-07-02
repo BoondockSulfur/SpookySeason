@@ -1,0 +1,154 @@
+# ═══════════════════════════════════════════════════════════
+# SpookySeason Configuration
+# ═══════════════════════════════════════════════════════════
+
+# Language: en, de (add your own in plugins/SpookySeason/lang/)
+language: en
+
+# Global toggle
+active: true
+
+# Update checker (queries Modrinth API on startup)
+updateChecker: true
+
+# Optional active window in October (inclusive). 0 = always active
+activeWindow:
+  startDay: 27
+  endDay: 31
+
+# ── World Filter ───────────────────────────────────────────
+# Leave empty to enable in ALL worlds. Add world names to restrict.
+# Example: ["world", "world_the_end"]
+enabledWorlds: []
+
+# ── Region Integration ─────────────────────────────────────
+regionIntegration:
+  enabled: true
+  worldGuard:
+    allowInProtected: false
+  griefPrevention:
+    allowInClaims: false
+    allowInAdminClaims: false
+
+# ── CustomJukebox Integration ──────────────────────────────
+# Set ambientDiscId to a CustomJukebox disc ID to use it
+# instead of vanilla ambient cave sounds during haunted nights.
+customJukebox:
+  ambientDiscId: ""
+  ambientLoop: true
+
+# ── Trick-or-Treat ─────────────────────────────────────────
+trickOrTreat:
+  enabled: true
+  cooldownSeconds: 90
+  # Global per-player cooldown between any two knocks (seconds, 0 = off).
+  # Prevents farming the leaderboard with many doors/villagers.
+  globalCooldownSeconds: 30
+  chanceTreat: 0.7
+  treatItems:
+    - CANDY_APPLE:2
+    - COOKIES:6
+    - PUMPKIN_PIE:1
+  meanMobs:
+    - WITCH
+    - ZOMBIE
+  meanMobBuffSeconds: 20
+
+# Also allow Trick-or-Treat on right-clicking villagers
+trickOrTreatVillagers:
+  enabled: true
+
+# ── Haunted Night ──────────────────────────────────────────
+hauntedNight:
+  enabled: true
+  ghostSpawnEverySeconds: 25
+  ghostPerPlayer: 1
+  ambientVolume: 0.7
+  ghostVolume: 0.5
+
+# ── Pumpkin Rain ───────────────────────────────────────────
+pumpkinRain:
+  enabled: true
+  spawnRadius: 10
+  intensity: 5
+  tickPeriod: 10
+  maxDurationSeconds: 60
+  volume: 0.6
+
+# ── Jump Scares ────────────────────────────────────────────
+# Triggers when breaking blocks in dark areas.
+jumpScare:
+  enabled: true
+  chance: 0.02
+  cooldownSeconds: 120
+  darkLightLevel: 4
+
+# ── Halloween Mob Heads ────────────────────────────────────
+# Zombies/Skeletons spawn with pumpkin heads, Creepers drop pumpkins.
+halloweenMobs:
+  enabled: true
+  pumpkinHeadChance: 0.3
+  creeperPumpkinDropChance: 0.1
+
+# ── Halloween Boss (Headless Horseman) ─────────────────────
+# Horse and rider share one HP pool. Damage to horse transfers to rider.
+halloweenBoss:
+  enabled: true
+  spawnChance: 0.005
+  # Minimum delay before the boss can spawn again after being defeated.
+  respawnCooldownSeconds: 300
+  health: 100
+  damage: 8
+  speed: 0.35
+  armor:
+    helmet: CARVED_PUMPKIN
+    chestplate: NETHERITE_CHESTPLATE
+    leggings: NETHERITE_LEGGINGS
+    boots: NETHERITE_BOOTS
+    weapon: NETHERITE_SWORD
+  abilities:
+    witherOnHit: true
+    witherDurationTicks: 100
+    fireResistance: true
+    charge: true
+    chargeIntervalSeconds: 15
+  lootTable:
+    - DIAMOND:2
+    - GOLDEN_APPLE:3
+    - NETHERITE_SCRAP:1
+
+# ── Bat Swarms ─────────────────────────────────────────────
+batSwarm:
+  enabled: true
+  spawnChance: 0.03
+  batsPerSwarm: 8
+  lifetimeSeconds: 5
+
+# ── Fog Effect ─────────────────────────────────────────────
+# Brief Darkness pulse during haunted nights.
+fog:
+  enabled: true
+  intervalSeconds: 60
+  durationTicks: 100
+
+# ── Treat Leaderboard ──────────────────────────────────────
+treatLeaderboard:
+  enabled: true
+
+# ── Season-End Rewards ─────────────────────────────────────
+# Console commands executed for top treat collectors when the season ends.
+# Placeholders: {player}, {rank}, {treats}
+# Auto-distributes when activeWindow ends, or manually via /spooky rewards.
+# Offline winners receive rewards on next join.
+seasonEndRewards:
+  enabled: true
+  commands:
+    1:
+      - "give {player} diamond 5"
+      - "give {player} netherite_ingot 1"
+    2:
+      - "give {player} diamond 3"
+      - "give {player} golden_apple 2"
+    3:
+      - "give {player} diamond 1"
+      - "give {player} golden_apple 1"

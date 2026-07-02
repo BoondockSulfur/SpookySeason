@@ -1,0 +1,86 @@
+# SpookySeason Sprachdatei - Deutsch
+
+command:
+  unknown-arg: "§7Unbekanntes Argument."
+  spooky:
+    usage: "§7Nutzung: §e/{label} <on|off|status|reload|rewards|spawn|optout|top|menu>"
+    enabled: "§aHalloween-Features aktiviert."
+    disabled: "§cHalloween-Features deaktiviert."
+    status-active: "§7Aktiv: §aJa"
+    status-inactive: "§7Aktiv: §cNein"
+    reloaded: "§aConfig und Sprache neu geladen."
+    no-permission: "§cDazu hast du keine Berechtigung."
+    optout-on: "§aDu hast dich von Halloween-Effekten abgemeldet."
+    optout-off: "§aDu bist wieder für Halloween-Effekte angemeldet."
+    top-header: "§6§l── Süßes-Rangliste ──"
+    top-entry: "§e#{rank} §7{player}: §b{treats} Süßes"
+    top-empty: "§7Noch kein Süßes gesammelt."
+    rewards-distributed: "§aSaisonende-Belohnungen wurden verteilt."
+    spawn-usage: "§7Nutzung: §e/{label} spawn <boss>"
+    spawn-boss: "§6Kopfloser Reiter gespawnt!"
+  pumpkinrain:
+    usage: "§7Nutzung: §e/{label} <start|stop>"
+    started: "§6Kürbisregen gestartet!"
+    stopped: "§6Kürbisregen gestoppt."
+  volume:
+    only-ingame: "Nur ingame nutzbar."
+    usage: "§7Nutzung: §e/{label} <ambient|ghost|rain|reset> [0.0-1.0]"
+    reset: "§aDeine Spooky-Lautstärken wurden zurückgesetzt."
+    need-value: "§7Bitte einen Wert zwischen 0.0 und 1.0 angeben."
+    invalid-number: "§7Ungültige Zahl."
+    set: "§aGesetzt: §e{key} §7= §b{value}"
+  boss:
+    usage: "§7Nutzung: §e/{label} <spawn|remove|info|set|armor|ability|loot>"
+    removed: "§aBoss entfernt."
+    info-header: "§6§l── Boss-Konfiguration ──"
+    set-usage: "§7Nutzung: §e/{label} set <health|damage|speed|spawnChance|enabled> <value>"
+    set-success: "§a{key} §aauf §b{value} §agesetzt. Nutze §e/spooky reload §azum Anwenden."
+    loot-usage: "§7Nutzung: §e/{label} loot <add|remove|list>"
+    loot-header: "§6§l── Boss Loot-Tabelle ──"
+    loot-added: "§aHinzugefügt: §e{entry}"
+    loot-removed: "§aEntfernt: §e{entry}"
+
+trickortreat:
+  cooldown: "§7Du hast hier schon geklingelt. Versuch es später nochmal!"
+  treat: "§6Süßes! ✨"
+  surprise: "§d☠ Überraschung! ☠"
+
+haunted:
+  bossbar: "§5§lBlutmond"
+  ghost-name: "Geist"
+
+boss:
+  name: "§4§lKopfloser Reiter"
+  spawn: "§c§lEin Kopfloser Reiter ist in der Nähe aufgetaucht!"
+  defeated: "§a§lDer Kopflose Reiter wurde besiegt!"
+
+item:
+  candy-apple: "Kandierter Apfel"
+  cookies: "Kekse"
+  pumpkin-pie: "Kürbiskuchen"
+
+update:
+  available: "§aEine neue Version von SpookySeason ist verfügbar: §e{version}"
+  download: "§7Download: §b{url}"
+
+rewards:
+  received: "§6§lGlückwunsch! §aDu hast Platz §e#{rank}§a in der Süßes-Rangliste erreicht! Deine Belohnung wurde zugestellt."
+  received-late: "§6§lGlückwunsch! §aDu hast deine Saisonende-Belohnung erhalten!"
+
+gui:
+  status: "§6Saison-Status"
+  status-active: "§aAktiv"
+  status-inactive: "§cInaktiv"
+  optout: "§eOpt-Out Umschalter"
+  optout-enabled: "§cDu bist abgemeldet"
+  optout-disabled: "§aDu bist angemeldet"
+  click-toggle: "§7Klicken zum Umschalten"
+  vol-ambient: "§eUmgebungslautstärke"
+  vol-ghost: "§eGeister-Lautstärke"
+  vol-rain: "§eRegen-Lautstärke"
+  click-increase: "§7Klick: +10%"
+  shift-decrease: "§7Shift-Klick: -10%"
+  leaderboard: "§6§lSüßes-Rangliste"
+
+plugin:
+  enabled: "SpookySeason aktiviert – Happy Halloween!"

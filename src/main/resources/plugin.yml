@@ -1,0 +1,35 @@
+name: SpookySeason
+version: 1.2.0
+main: org.example.SpookySeason
+api-version: '1.21'
+folia-supported: true
+authors: [ "BoondockSulfur" ]
+description: Halloween event plugin – Trick-or-Treat, pumpkin rain, haunted nights, boss fights and more.
+
+softdepend:
+  - WorldGuard
+  - GriefPrevention
+  - PlaceholderAPI
+  - CustomJukebox
+
+commands:
+  pumpkinrain:
+    description: Starts/stops the pumpkin rain.
+    usage: /pumpkinrain <start|stop>
+    permission: spooky.pumpkinrain
+  spooky:
+    description: Halloween features – toggle, reload, opt-out, leaderboard.
+    usage: /spooky <on|off|status|reload|rewards|spawn|optout|top|menu>
+  spookyvolume:
+    description: Set your personal spooky sound volume.
+    usage: /spookyvolume <ambient|ghost|rain|reset> [0.0-1.0]
+  spookyboss:
+    description: Configure and control the Halloween boss.
+    usage: /spookyboss <spawn|remove|info|set|armor|ability|loot>
+    permission: spooky.admin
+
+permissions:
+  spooky.pumpkinrain:
+    default: op
+  spooky.admin:
+    default: op

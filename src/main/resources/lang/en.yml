@@ -1,0 +1,86 @@
+# SpookySeason Language File - English (Default)
+
+command:
+  unknown-arg: "§7Unknown argument."
+  spooky:
+    usage: "§7Usage: §e/{label} <on|off|status|reload|rewards|spawn|optout|top|menu>"
+    enabled: "§aHalloween features enabled."
+    disabled: "§cHalloween features disabled."
+    status-active: "§7Active: §aYes"
+    status-inactive: "§7Active: §cNo"
+    reloaded: "§aConfig and language reloaded."
+    no-permission: "§cYou don't have permission to do that."
+    optout-on: "§aYou have opted out of Halloween effects."
+    optout-off: "§aYou have opted back in to Halloween effects."
+    top-header: "§6§l── Treat Leaderboard ──"
+    top-entry: "§e#{rank} §7{player}: §b{treats} treats"
+    top-empty: "§7No treats collected yet."
+    rewards-distributed: "§aSeason-end rewards have been distributed."
+    spawn-usage: "§7Usage: §e/{label} spawn <boss>"
+    spawn-boss: "§6Headless Horseman spawned!"
+  pumpkinrain:
+    usage: "§7Usage: §e/{label} <start|stop>"
+    started: "§6Pumpkin rain started!"
+    stopped: "§6Pumpkin rain stopped."
+  volume:
+    only-ingame: "Only usable in-game."
+    usage: "§7Usage: §e/{label} <ambient|ghost|rain|reset> [0.0-1.0]"
+    reset: "§aYour spooky volumes have been reset."
+    need-value: "§7Please provide a value between 0.0 and 1.0."
+    invalid-number: "§7Invalid number."
+    set: "§aSet: §e{key} §7= §b{value}"
+  boss:
+    usage: "§7Usage: §e/{label} <spawn|remove|info|set|armor|ability|loot>"
+    removed: "§aBoss removed."
+    info-header: "§6§l── Boss Configuration ──"
+    set-usage: "§7Usage: §e/{label} set <health|damage|speed|spawnChance|enabled> <value>"
+    set-success: "§aSet §e{key} §ato §b{value}§a. Use §e/spooky reload §ato apply."
+    loot-usage: "§7Usage: §e/{label} loot <add|remove|list>"
+    loot-header: "§6§l── Boss Loot Table ──"
+    loot-added: "§aAdded: §e{entry}"
+    loot-removed: "§aRemoved: §e{entry}"
+
+trickortreat:
+  cooldown: "§7You already knocked here. Try again later!"
+  treat: "§6Treat! ✨"
+  surprise: "§d☠ Surprise! ☠"
+
+haunted:
+  bossbar: "§5§lBlood Moon"
+  ghost-name: "Ghost"
+
+boss:
+  name: "§4§lHeadless Horseman"
+  spawn: "§c§lA Headless Horseman has appeared nearby!"
+  defeated: "§a§lThe Headless Horseman has been defeated!"
+
+item:
+  candy-apple: "Candy Apple"
+  cookies: "Cookies"
+  pumpkin-pie: "Pumpkin Pie"
+
+update:
+  available: "§aA new version of SpookySeason is available: §e{version}"
+  download: "§7Download: §b{url}"
+
+rewards:
+  received: "§6§lCongratulations! §aYou placed §e#{rank}§a in the treat leaderboard! Your reward has been delivered."
+  received-late: "§6§lCongratulations! §aYou received your season-end reward!"
+
+gui:
+  status: "§6Season Status"
+  status-active: "§aActive"
+  status-inactive: "§cInactive"
+  optout: "§eOpt-Out Toggle"
+  optout-enabled: "§cYou are opted out"
+  optout-disabled: "§aYou are opted in"
+  click-toggle: "§7Click to toggle"
+  vol-ambient: "§eAmbient Volume"
+  vol-ghost: "§eGhost Volume"
+  vol-rain: "§eRain Volume"
+  click-increase: "§7Click: +10%"
+  shift-decrease: "§7Shift-Click: -10%"
+  leaderboard: "§6§lTreat Leaderboard"
+
+plugin:
+  enabled: "SpookySeason enabled – Happy Halloween!"
