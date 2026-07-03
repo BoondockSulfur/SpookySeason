@@ -57,6 +57,7 @@ import org.example.lang.Lang;
 import org.example.prefs.PlayerPrefs;
 import org.example.prefs.PlayerStats;
 import org.example.update.UpdateChecker;
+import org.example.util.Attributes;
 import org.example.util.ConfigMerger;
 import org.example.util.Scheduler;
 
@@ -121,6 +122,9 @@ extends JavaPlugin {
 
     public void onEnable() {
         instance = this;
+        // Löst die Attribute über die Registry auf (1.21.x- und 26.x-Keys) —
+        // schlägt das fehl, soll es sofort hier knallen, nicht erst beim Boss-Spawn.
+        Attributes.init();
         this.entityMarker = new NamespacedKey((Plugin)this, "spooky_entity");
         this.saveDefaultConfig();
         ConfigMerger.merge((Plugin)this, "config.yml", new File(this.getDataFolder(), "config.yml"));

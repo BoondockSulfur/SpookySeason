@@ -7,12 +7,14 @@
     <artifactId>spookyseason</artifactId>
     <version>1.2.0</version>
     <name>SpookySeason</name>
-    <description>Halloween event plugin for Paper/Folia 1.21.x</description>
+    <description>Halloween event plugin for Paper/Folia 1.21.x and 26.x</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>1.21.1-R0.1-SNAPSHOT</paper.version>
+        <!-- Paper API for MC 26.1.x (year-based versioning; artifact scheme changed from -R0.1-SNAPSHOT to .build.N-stable).
+             One JAR covers 1.21.x and 26.x: api-version stays '1.21', attributes resolve via registry (util/Attributes). -->
+        <paper.version>26.1.2.build.72-stable</paper.version>
     </properties>
 
     <repositories>

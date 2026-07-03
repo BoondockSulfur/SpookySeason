@@ -80,6 +80,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
+import org.example.util.Attributes;
 import org.example.util.Scheduler;
 
 public class HalloweenBossManager
@@ -170,7 +171,7 @@ implements Listener {
             }
             if (this.bossBar != null && boss instanceof LivingEntity) {
                 le = (LivingEntity)boss;
-                AttributeInstance maxAttr = le.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+                AttributeInstance maxAttr = le.getAttribute(Attributes.MAX_HEALTH);
                 if (maxAttr != null) {
                     this.bossBar.setProgress(Math.max(0.0, Math.min(1.0, le.getHealth() / maxAttr.getValue())));
                 }
@@ -234,16 +235,16 @@ implements Listener {
         horse.setTamed(true);
         horse.setAdult();
         horse.setInvulnerable(false);
-        horse.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(speed);
+        horse.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(speed);
         horse.customName(((TextComponent)Component.text((String)bossName).color((TextColor)NamedTextColor.DARK_RED)).decorate(TextDecoration.BOLD));
         WitherSkeleton rider = (WitherSkeleton)w.spawnEntity(loc, EntityType.WITHER_SKELETON);
         rider.getPersistentDataContainer().set(SpookySeason.get().entityMarker(), PersistentDataType.BYTE, (byte)1);
         rider.customName(((TextComponent)Component.text((String)bossName).color((TextColor)NamedTextColor.DARK_RED)).decorate(TextDecoration.BOLD));
         rider.setCustomNameVisible(true);
         rider.setGlowing(true);
-        rider.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(health);
+        rider.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
         rider.setHealth(health);
-        rider.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(damage);
+        rider.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(damage);
         EntityEquipment eq = rider.getEquipment();
         if (eq != null) {
             eq.setHelmet(HalloweenBossManager.safeItem(cfg.getString("halloweenBoss.armor.helmet", "CARVED_PUMPKIN")));

@@ -65,6 +65,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
+import org.example.util.Attributes;
 import org.example.util.Scheduler;
 
 public class HauntedNightManager {
@@ -282,8 +283,8 @@ public class HauntedNightManager {
                     ghost.setCustomNameVisible(true);
                     ghost.setGlowing(true);
                     ghost.getPersistentDataContainer().set(this.GHOST_MARKER, PersistentDataType.BYTE, (byte)1);
-                    if (ghost instanceof LivingEntity && (le = (LivingEntity)ghost).getAttribute(Attribute.GENERIC_ATTACK_DAMAGE) != null) {
-                        le.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(0.0);
+                    if (ghost instanceof LivingEntity && (le = (LivingEntity)ghost).getAttribute(Attributes.ATTACK_DAMAGE) != null) {
+                        le.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(0.0);
                     }
                     pLoc.getWorld().spawnParticle(Particle.INSTANT_EFFECT, ghost.getLocation().add(0.0, 1.0, 0.0), 20, 0.5, 0.5, 0.5, 0.01);
                     float vol = (float)SpookySeason.get().prefs().getGhostVol(p.getUniqueId(), this.cfgGhostVol);

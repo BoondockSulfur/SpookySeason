@@ -1,6 +1,8 @@
 # SpookySeason
 
-Halloween-Event-Plugin für Paper/Folia 1.21.x — Trick-or-Treat, Kürbisregen, Blutmond-Nächte, Kopfloser-Reiter-Boss, Fledermausschwärme, Jumpscares und Season-End-Rewards.
+Halloween-Event-Plugin für Paper/Folia **1.21.x und 26.x** — Trick-or-Treat, Kürbisregen, Blutmond-Nächte, Kopfloser-Reiter-Boss, Fledermausschwärme, Jumpscares und Season-End-Rewards.
+
+Eine Jar deckt beide Versionslinien ab: kompiliert gegen die Paper-26.1.2-API, `api-version: '1.21'` als Minimum. Die mit MC 1.21.3 umbenannten Attribute (`GENERIC_MAX_HEALTH` → `MAX_HEALTH`) werden zur Laufzeit über die Registry aufgelöst (`util/Attributes`, mit Fallback auf die Legacy-Keys) statt über Enum-Konstanten — verifiziert auf Paper 26.1.2, Paper 1.21.1 und Folia 1.21.4.
 
 ## Historie
 
@@ -26,4 +28,4 @@ Halloween-Event-Plugin für Paper/Folia 1.21.x — Trick-or-Treat, Kürbisregen,
 mvn package        # → target/spookyseason-1.2.0.jar
 ```
 
-Benötigt Java 21+. API: Paper 1.21.1 (`api-version: '1.21'`, `folia-supported: true`).
+Benötigt Java 21+. API: Paper 26.1.2 (`api-version: '1.21'`, `folia-supported: true`); läuft auf 1.21.x und 26.x.
