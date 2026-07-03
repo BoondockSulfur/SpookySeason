@@ -93,6 +93,7 @@ implements Listener {
     private int chargeCooldown;
     private Location bossSpawnLoc;
     private long respawnCooldownUntil;
+    private boolean forceSpawned;
 
     public HalloweenBossManager(Plugin plugin) {
         this.plugin = plugin;
@@ -148,7 +149,7 @@ implements Listener {
                     if (!SpookySeason.get().regions().canSpawnAt(loc)) {
                         return;
                     }
-                    this.spawnBoss(loc);
+                    this.spawnBoss(loc, false);
                 });
                 return;
             }
@@ -201,7 +202,9 @@ implements Listener {
                     }
                 }
             }
-            if (!SpookySeason.get().isSeasonActive() || (time = boss.getWorld().getTime()) < 13000L || time > 23000L) {
+            // Admin-Spawns (/spookyboss spawn) sind vom Auto-Despawn ausgenommen —
+            // sonst verschwindet ein außerhalb der Season/tagsüber erzwungener Boss nach 1s.
+            if (!this.forceSpawned && (!SpookySeason.get().isSeasonActive() || (time = boss.getWorld().getTime()) < 13000L || time > 23000L)) {
                 this.removeBoss();
             }
         }
@@ -215,11 +218,11 @@ implements Listener {
         Scheduler.runAtLocation(this.plugin, player.getLocation(), () -> {
             Location loc = player.getLocation().clone().add(5.0, 0.0, 5.0);
             loc.setY((double)(player.getWorld().getHighestBlockYAt(loc) + 1));
-            this.spawnBoss(loc);
+            this.spawnBoss(loc, true);
         });
     }
 
-    private void spawnBoss(Location loc) {
+    private void spawnBoss(Location loc, boolean forced) {
         FileConfiguration cfg = this.plugin.getConfig();
         String bossName = Lang.get("boss.name", new String[0]);
         double health = cfg.getDouble("halloweenBoss.health", 100.0);
@@ -260,6 +263,7 @@ implements Listener {
         horse.addPassenger((Entity)rider);
         this.bossUUID = rider.getUniqueId();
         this.horseUUID = horse.getUniqueId();
+        this.forceSpawned = forced;
         this.bossSpawnLoc = loc.clone();
         this.chargeCooldown = cfg.getInt("halloweenBoss.abilities.chargeIntervalSeconds", 15);
         this.bossBar = Bukkit.createBossBar((String)bossName, (BarColor)BarColor.RED, (BarStyle)BarStyle.SEGMENTED_10, (BarFlag[])new BarFlag[0]);
@@ -351,6 +355,7 @@ implements Listener {
         this.bossUUID = null;
         this.horseUUID = null;
         this.bossSpawnLoc = null;
+        this.forceSpawned = false;
         if (loc != null && (riderUUID != null || mountUUID != null)) {
             Scheduler.runAtLocation(this.plugin, loc, () -> {
                 Entity e;
