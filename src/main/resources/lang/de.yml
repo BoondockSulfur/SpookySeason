@@ -39,6 +39,16 @@ command:
     loot-header: "§6§l── Boss Loot-Tabelle ──"
     loot-added: "§aHinzugefügt: §e{entry}"
     loot-removed: "§aEntfernt: §e{entry}"
+    armor-usage: "§7Nutzung: §e/{label} armor <helmet|chestplate|leggings|boots|weapon> <MATERIAL|none>"
+    ability-usage: "§7Nutzung: §e/{label} ability <witherOnHit|witherDurationTicks|fireResistance|charge|chargeIntervalSeconds> <value>"
+    loot-add-usage: "§7Nutzung: §e/{label} loot add <MATERIAL:anzahl>"
+    loot-remove-usage: "§7Nutzung: §e/{label} loot remove <index>"
+    loot-empty: "§7Die Loot-Tabelle ist leer."
+    unknown-material: "§cUnbekanntes Material: §e{material}"
+    invalid-index: "§cUngültiger Index."
+    info-armor: "§6§l── Rüstung ──"
+    info-abilities: "§6§l── Fähigkeiten ──"
+    info-loot: "§6§l── Loot ──"
 
 trickortreat:
   cooldown: "§7Du hast hier schon geklingelt. Versuch es später nochmal!"

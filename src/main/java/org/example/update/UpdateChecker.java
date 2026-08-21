@@ -54,18 +54,66 @@ implements Listener {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200 && !(versions = JsonParser.parseString((String)response.body()).getAsJsonArray()).isEmpty()) {
                 JsonObject latest = versions.get(0).getAsJsonObject();
-                this.latestVersion = latest.get("version_number").getAsString();
+                String remoteVersion = latest.get("version_number").getAsString();
                 String currentVersion = this.plugin.getDescription().getVersion();
-                if (!this.latestVersion.equals(currentVersion)) {
-                    this.downloadUrl = "https://modrinth.com/project/spookyseason/version/" + this.latestVersion;
+                if (UpdateChecker.isNewer(remoteVersion, currentVersion)) {
+                    this.latestVersion = remoteVersion;
+                    this.downloadUrl = "https://modrinth.com/project/spookyseason/version/" + remoteVersion;
                     this.updateAvailable = true;
-                    this.plugin.getLogger().info("New version available: " + this.latestVersion + " (current: " + currentVersion + ")");
+                    this.plugin.getLogger().info("New version available: " + remoteVersion + " (current: " + currentVersion + ")");
                 }
             }
         }
         catch (Exception e) {
             this.plugin.getLogger().warning("Could not check for updates: " + e.getMessage());
         }
+    }
+
+    /**
+     * Vergleicht der Reihe nach die Zahlenblöcke. Ein reiner Ungleichheitstest würde auch dann
+     * ein „Update" melden, wenn auf Modrinth eine ältere Version obenauf liegt.
+     */
+    static boolean isNewer(String remote, String local) {
+        int[] r = UpdateChecker.parseVersion(remote);
+        int[] l = UpdateChecker.parseVersion(local);
+        int len = Math.max(r.length, l.length);
+        for (int i = 0; i < len; ++i) {
+            int rv = i < r.length ? r[i] : 0;
+            int lv = i < l.length ? l[i] : 0;
+            if (rv != lv) {
+                return rv > lv;
+            }
+        }
+        return false;
+    }
+
+    /** "v1.2.3-beta.2" → [1, 2, 3]; alles ab dem ersten Suffix wird verworfen. */
+    private static int[] parseVersion(String version) {
+        if (version == null) {
+            return new int[0];
+        }
+        String cleaned = version.trim();
+        if (cleaned.startsWith("v") || cleaned.startsWith("V")) {
+            cleaned = cleaned.substring(1);
+        }
+        int cut = cleaned.length();
+        for (int i = 0; i < cleaned.length(); ++i) {
+            char c = cleaned.charAt(i);
+            if (Character.isDigit(c) || c == '.') continue;
+            cut = i;
+            break;
+        }
+        String[] parts = cleaned.substring(0, cut).split("\\.");
+        int[] out = new int[parts.length];
+        for (int i = 0; i < parts.length; ++i) {
+            try {
+                out[i] = parts[i].isEmpty() ? 0 : Integer.parseInt(parts[i]);
+            }
+            catch (NumberFormatException ex) {
+                out[i] = 0;
+            }
+        }
+        return out;
     }
 
     @EventHandler

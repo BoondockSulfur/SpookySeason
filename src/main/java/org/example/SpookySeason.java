@@ -215,14 +215,18 @@ extends JavaPlugin {
     }
 
     public void removeAllPluginEntities() {
+        if (Scheduler.isFolia()) {
+            // Auf Folia gehört die Entity-Liste einer Welt keinem einzelnen Thread — sie lässt
+            // sich regionsübergreifend nicht sicher durchgehen. Die aktiven Entities räumen die
+            // Manager in stopAll() selbst ab; verwaiste Reste (Crash, alte Chunks) entfernt der
+            // EntityCleanupListener beim nächsten Chunk-Load.
+            return;
+        }
         for (World w : Bukkit.getWorlds()) {
             for (Entity e : w.getEntities()) {
                 if (!e.getPersistentDataContainer().has(this.entityMarker, PersistentDataType.BYTE)) continue;
-                Scheduler.runAtLocation((Plugin)this, e.getLocation(), () -> {
-                    if (e.isValid() && !e.isDead()) {
-                        e.remove();
-                    }
-                });
+                if (!e.isValid() || e.isDead()) continue;
+                e.remove();
             }
         }
     }
@@ -253,10 +257,16 @@ extends JavaPlugin {
     }
 
     public boolean isSeasonActive() {
+        return this.getConfig().getBoolean("active", true) && this.isInSeasonWindow();
+    }
+
+    /**
+     * Nur das Kalenderfenster, ohne den manuellen {@code active}-Schalter.
+     * Die Season-End-Rewards hängen bewusst hieran: Sonst zählt ein {@code /spooky off} mitten
+     * in der Season als Season-Ende — mit Reward-Verteilung und zurückgesetzter Treat-Statistik.
+     */
+    public boolean isInSeasonWindow() {
         FileConfiguration cfg = this.getConfig();
-        if (!cfg.getBoolean("active", true)) {
-            return false;
-        }
         int start = cfg.getInt("activeWindow.startDay", 0);
         int end = cfg.getInt("activeWindow.endDay", 0);
         if (start == 0 || end == 0) {

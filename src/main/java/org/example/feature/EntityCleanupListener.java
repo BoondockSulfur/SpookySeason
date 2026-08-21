@@ -7,6 +7,7 @@ import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.example.SpookySeason;
+import org.example.util.Scheduler;
 
 public class EntityCleanupListener
 implements Listener {
@@ -24,7 +25,13 @@ implements Listener {
         for (Entity entity : e.getEntities()) {
             if (!entity.getPersistentDataContainer().has(this.plugin.entityMarker(), PersistentDataType.BYTE)) continue;
             if (this.plugin.boss() != null && this.plugin.boss().isTracked(entity.getUniqueId())) continue;
-            entity.remove();
+            // Einen Tick später entfernen: Entities mitten im Ladevorgang zu löschen, ist
+            // heikel — der Server ist mit genau dieser Liste gerade selbst beschäftigt.
+            Scheduler.runEntityLater(this.plugin, entity, () -> {
+                if (entity.isValid() && !entity.isDead()) {
+                    entity.remove();
+                }
+            }, 1L);
         }
     }
 

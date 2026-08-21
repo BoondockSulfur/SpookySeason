@@ -5,13 +5,15 @@
 # Language: en, de (add your own in plugins/SpookySeason/lang/)
 language: en
 
-# Global toggle
+# Global toggle. Turning this off stops all features, but it is NOT a season end:
+# no rewards are handed out and the treat stats are kept (see seasonEndRewards).
 active: true
 
 # Update checker (queries Modrinth API on startup)
 updateChecker: true
 
-# Optional active window in October (inclusive). 0 = always active
+# Optional active window in October (inclusive). 0 = always active.
+# The season counts as active only when 'active' is true AND this window matches.
 activeWindow:
   startDay: 27
   endDay: 31
@@ -138,7 +140,11 @@ treatLeaderboard:
 # ── Season-End Rewards ─────────────────────────────────────
 # Console commands executed for top treat collectors when the season ends.
 # Placeholders: {player}, {rank}, {treats}
-# Auto-distributes when activeWindow ends, or manually via /spooky rewards.
+# Auto-distributes when the activeWindow closes, or manually via /spooky rewards.
+# Note: with startDay/endDay set to 0 (always active) that transition never happens,
+# so rewards are only ever handed out manually. A manual /spooky off does NOT count
+# as a season end either. If the server was offline during the transition, it is
+# caught up on the next start (state is kept in reward-state.yml).
 # Offline winners receive rewards on next join.
 seasonEndRewards:
   enabled: true

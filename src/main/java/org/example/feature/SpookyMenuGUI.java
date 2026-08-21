@@ -44,6 +44,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
 import org.example.prefs.PlayerStats;
+import org.example.util.Scheduler;
 
 public class SpookyMenuGUI
 implements Listener {
@@ -114,28 +115,28 @@ implements Listener {
         switch (slot) {
             case 10: {
                 plugin.prefs().toggleOptOut(id);
-                this.open(p);
+                this.reopen(p);
                 break;
             }
             case 12: {
                 double cur = plugin.prefs().getAmbientVol(id, plugin.getConfig().getDouble("hauntedNight.ambientVolume", 0.7));
                 double next = e.isShiftClick() ? cur - 0.1 : cur + 0.1;
                 plugin.prefs().setAmbientVol(id, Math.max(0.0, Math.min(1.0, next)));
-                this.open(p);
+                this.reopen(p);
                 break;
             }
             case 14: {
                 double cur = plugin.prefs().getGhostVol(id, plugin.getConfig().getDouble("hauntedNight.ghostVolume", 0.5));
                 double next = e.isShiftClick() ? cur - 0.1 : cur + 0.1;
                 plugin.prefs().setGhostVol(id, Math.max(0.0, Math.min(1.0, next)));
-                this.open(p);
+                this.reopen(p);
                 break;
             }
             case 16: {
                 double cur = plugin.prefs().getRainVol(id, plugin.getConfig().getDouble("pumpkinRain.volume", 0.6));
                 double next = e.isShiftClick() ? cur - 0.1 : cur + 0.1;
                 plugin.prefs().setRainVol(id, Math.max(0.0, Math.min(1.0, next)));
-                this.open(p);
+                this.reopen(p);
             }
         }
     }
@@ -148,6 +149,16 @@ implements Listener {
             return;
         }
         e.setCancelled(true);
+    }
+
+    // Inventar nicht mitten im Click-Event neu öffnen — der Client bleibt sonst gern mit
+    // Geister-Items aus dem alten View zurück. Ein Tick später ist das Event durch.
+    private void reopen(Player p) {
+        Scheduler.runEntityLater(SpookySeason.get(), p, () -> {
+            if (p.isOnline()) {
+                this.open(p);
+            }
+        }, 1L);
     }
 
     private ItemStack volumeItem(String name, double vol) {

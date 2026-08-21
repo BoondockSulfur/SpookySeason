@@ -151,11 +151,13 @@ implements Listener {
         if (!this.plugin.regions().canPlayerInteract(p, villager.getLocation())) {
             return;
         }
-        e.setCancelled(true);
         String key = this.villagerCooldownKey(p.getUniqueId(), villager);
         if (!this.checkCooldown(p, key)) {
+            // Kein Trick-or-Treat (Cooldown läuft noch) → Event NICHT abbrechen. Sonst wäre der
+            // Handel mit Villagern die ganze Season über komplett blockiert.
             return;
         }
+        e.setCancelled(true);
         this.rollTrickOrTreat(p);
     }
 

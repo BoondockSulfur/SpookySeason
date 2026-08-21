@@ -65,20 +65,20 @@ TabCompleter {
                 sender.sendMessage("\u00a77damage: \u00a7e" + cfg.getDouble("halloweenBoss.damage", 8.0));
                 sender.sendMessage("\u00a77speed: \u00a7e" + cfg.getDouble("halloweenBoss.speed", 0.35));
                 sender.sendMessage("\u00a77spawnChance: \u00a7e" + cfg.getDouble("halloweenBoss.spawnChance", 0.005));
-                sender.sendMessage("\u00a76\u00a7l\u2500\u2500 Armor \u2500\u2500");
+                sender.sendMessage(Lang.get("command.boss.info-armor", new String[0]));
                 for (String slot : ARMOR_SLOTS) {
                     sender.sendMessage("\u00a77" + slot + ": \u00a7e" + cfg.getString("halloweenBoss.armor." + slot, "(none)"));
                 }
-                sender.sendMessage("\u00a76\u00a7l\u2500\u2500 Abilities \u2500\u2500");
+                sender.sendMessage(Lang.get("command.boss.info-abilities", new String[0]));
                 sender.sendMessage("\u00a77witherOnHit: \u00a7e" + cfg.getBoolean("halloweenBoss.abilities.witherOnHit", true));
                 sender.sendMessage("\u00a77witherDurationTicks: \u00a7e" + cfg.getInt("halloweenBoss.abilities.witherDurationTicks", 100));
                 sender.sendMessage("\u00a77fireResistance: \u00a7e" + cfg.getBoolean("halloweenBoss.abilities.fireResistance", true));
                 sender.sendMessage("\u00a77charge: \u00a7e" + cfg.getBoolean("halloweenBoss.abilities.charge", true));
                 sender.sendMessage("\u00a77chargeIntervalSeconds: \u00a7e" + cfg.getInt("halloweenBoss.abilities.chargeIntervalSeconds", 15));
-                sender.sendMessage("\u00a76\u00a7l\u2500\u2500 Loot \u2500\u2500");
+                sender.sendMessage(Lang.get("command.boss.info-loot", new String[0]));
                 List<String> loot = cfg.getStringList("halloweenBoss.lootTable");
                 if (loot.isEmpty()) {
-                    sender.sendMessage("\u00a77(empty)");
+                    sender.sendMessage(Lang.get("command.boss.loot-empty", new String[0]));
                     break;
                 }
                 for (int i = 0; i < loot.size(); ++i) {
@@ -88,7 +88,7 @@ TabCompleter {
             }
             case "set": {
                 if (args.length < 3) {
-                    sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " set <" + String.join((CharSequence)"|", SET_KEYS) + "> <value>");
+                    sender.sendMessage(Lang.get("command.boss.set-usage", "label", label));
                     return true;
                 }
                 String key = args[1].toLowerCase();
@@ -135,7 +135,7 @@ TabCompleter {
                         break;
                     }
                     default: {
-                        sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " set <" + String.join((CharSequence)"|", SET_KEYS) + "> <value>");
+                        sender.sendMessage(Lang.get("command.boss.set-usage", "label", label));
                         return true;
                     }
                 }
@@ -145,17 +145,17 @@ TabCompleter {
             }
             case "armor": {
                 if (args.length < 3) {
-                    sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " armor <" + String.join((CharSequence)"|", ARMOR_SLOTS) + "> <MATERIAL|none>");
+                    sender.sendMessage(Lang.get("command.boss.armor-usage", "label", label));
                     return true;
                 }
                 String slot = args[1].toLowerCase();
                 if (!ARMOR_SLOTS.contains(slot)) {
-                    sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " armor <" + String.join((CharSequence)"|", ARMOR_SLOTS) + "> <MATERIAL|none>");
+                    sender.sendMessage(Lang.get("command.boss.armor-usage", "label", label));
                     return true;
                 }
                 String matName = args[2].equalsIgnoreCase("none") ? "" : args[2].toUpperCase();
                 if (!matName.isEmpty() && Material.matchMaterial((String)matName) == null) {
-                    sender.sendMessage("\u00a7cUnknown material: " + matName);
+                    sender.sendMessage(Lang.get("command.boss.unknown-material", "material", matName));
                     return true;
                 }
                 cfg.set("halloweenBoss.armor." + slot, (Object)matName);
@@ -165,7 +165,7 @@ TabCompleter {
             }
             case "ability": {
                 if (args.length < 3) {
-                    sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " ability <" + String.join((CharSequence)"|", ABILITY_KEYS) + "> <value>");
+                    sender.sendMessage(Lang.get("command.boss.ability-usage", "label", label));
                     return true;
                 }
                 // Auf die kanonische Schreibweise normalisieren — sonst legt z.B.
@@ -191,7 +191,7 @@ TabCompleter {
                         break;
                     }
                     default: {
-                        sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " ability <" + String.join((CharSequence)"|", ABILITY_KEYS) + "> <value>");
+                        sender.sendMessage(Lang.get("command.boss.ability-usage", "label", label));
                         return true;
                     }
                 }
@@ -201,14 +201,14 @@ TabCompleter {
             }
             case "loot": {
                 if (args.length < 2) {
-                    sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " loot <add|remove|list>");
+                    sender.sendMessage(Lang.get("command.boss.loot-usage", "label", label));
                     return true;
                 }
                 ArrayList<String> loot = new ArrayList<String>(cfg.getStringList("halloweenBoss.lootTable"));
                 switch (args[1].toLowerCase()) {
                     case "list": {
                         if (loot.isEmpty()) {
-                            sender.sendMessage("\u00a77Loot table is empty.");
+                            sender.sendMessage(Lang.get("command.boss.loot-empty", new String[0]));
                             break;
                         }
                         sender.sendMessage(Lang.get("command.boss.loot-header", new String[0]));
@@ -219,13 +219,13 @@ TabCompleter {
                     }
                     case "add": {
                         if (args.length < 3) {
-                            sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " loot add <MATERIAL:amount>");
+                            sender.sendMessage(Lang.get("command.boss.loot-add-usage", "label", label));
                             return true;
                         }
                         String entry = args[2].toUpperCase();
                         String[] entryParts = entry.split(":");
                         if (Material.matchMaterial((String)entryParts[0]) == null) {
-                            sender.sendMessage("\u00a7cUnknown material: " + entryParts[0]);
+                            sender.sendMessage(Lang.get("command.boss.unknown-material", "material", entryParts[0]));
                             return true;
                         }
                         if (entryParts.length > 1 && SpookyBossCommand.parseDouble(entryParts[1], -1.0) < 1.0) {
@@ -240,12 +240,12 @@ TabCompleter {
                     }
                     case "remove": {
                         if (args.length < 3) {
-                            sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " loot remove <index>");
+                            sender.sendMessage(Lang.get("command.boss.loot-remove-usage", "label", label));
                             return true;
                         }
                         int idx = (int)SpookyBossCommand.parseDouble(args[2], 0.0) - 1;
                         if (idx < 0 || idx >= loot.size()) {
-                            sender.sendMessage("\u00a7cInvalid index.");
+                            sender.sendMessage(Lang.get("command.boss.invalid-index", new String[0]));
                             return true;
                         }
                         String removed = (String)loot.remove(idx);
@@ -255,7 +255,7 @@ TabCompleter {
                         break;
                     }
                     default: {
-                        sender.sendMessage("\u00a77Usage: \u00a7e/" + label + " loot <add|remove|list>");
+                        sender.sendMessage(Lang.get("command.boss.loot-usage", "label", label));
                         break;
                     }
                 }

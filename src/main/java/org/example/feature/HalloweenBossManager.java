@@ -88,13 +88,18 @@ implements Listener {
     private final Plugin plugin;
     private Scheduler.TaskHandle tickTask;
     private Scheduler.TaskHandle bossTickHandle;
-    private UUID bossUUID;
-    private UUID horseUUID;
+    // Die Felder werden vom spawnenden Region-Thread geschrieben und aus Events sowie dem
+    // Entity-Tick anderer Threads gelesen — volatile für die Sichtbarkeit.
+    private volatile UUID bossUUID;
+    private volatile UUID horseUUID;
+    // Direkte Referenzen statt Bukkit.getEntity(UUID): eine gehaltene Entity lässt sich über
+    // ihren eigenen Scheduler immer im richtigen Region-Thread anfassen, eine UUID nicht.
+    private volatile Entity bossEntity;
+    private volatile Entity horseEntity;
     private BossBar bossBar;
     private int chargeCooldown;
-    private Location bossSpawnLoc;
     private long respawnCooldownUntil;
-    private boolean forceSpawned;
+    private volatile boolean forceSpawned;
 
     public HalloweenBossManager(Plugin plugin) {
         this.plugin = plugin;
@@ -164,7 +169,7 @@ implements Listener {
         try {
             long time;
             LivingEntity le;
-            Entity boss = Bukkit.getEntity((UUID)this.bossUUID);
+            Entity boss = this.bossEntity;
             if (boss == null || boss.isDead() || !boss.isValid()) {
                 this.removeBoss();
                 return;
@@ -223,7 +228,12 @@ implements Listener {
         });
     }
 
-    private void spawnBoss(Location loc, boolean forced) {
+    private synchronized void spawnBoss(Location loc, boolean forced) {
+        if (this.bossUUID != null) {
+            // Zwei gleichzeitige Spawn-Anläufe (Auto-Tick und /spookyboss spawn) würden sonst
+            // den ersten Boss als nicht mehr getrackte Waise zurücklassen.
+            return;
+        }
         FileConfiguration cfg = this.plugin.getConfig();
         String bossName = Lang.get("boss.name", new String[0]);
         double health = cfg.getDouble("halloweenBoss.health", 100.0);
@@ -262,10 +272,11 @@ implements Listener {
             rider.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, false, false));
         }
         horse.addPassenger((Entity)rider);
+        this.bossEntity = rider;
+        this.horseEntity = horse;
         this.bossUUID = rider.getUniqueId();
         this.horseUUID = horse.getUniqueId();
         this.forceSpawned = forced;
-        this.bossSpawnLoc = loc.clone();
         this.chargeCooldown = cfg.getInt("halloweenBoss.abilities.chargeIntervalSeconds", 15);
         this.bossBar = Bukkit.createBossBar((String)bossName, (BarColor)BarColor.RED, (BarStyle)BarStyle.SEGMENTED_10, (BarFlag[])new BarFlag[0]);
         this.bossBar.setVisible(true);
@@ -275,7 +286,10 @@ implements Listener {
             p.sendMessage(Lang.get("boss.spawn", new String[0]));
         }
         w.strikeLightningEffect(loc);
-        this.bossTickHandle = Scheduler.runEntityTimer(this.plugin, (Entity)rider, this::bossTick, 20L, 20L);
+        // Retired-Callback: Auf Folia hängt der Boss-Tick an der Entity und verschwindet mit ihr
+        // (Chunk-Entladung, Tod). Ohne Aufräumen bliebe bossUUID gesetzt und es spawnte bis zum
+        // Neustart nie wieder ein Boss.
+        this.bossTickHandle = Scheduler.runEntityTimer(this.plugin, (Entity)rider, this::bossTick, this::onBossRetired, 20L, 20L);
         SpookySeason.get().haunted().refreshBar();
     }
 
@@ -288,7 +302,7 @@ implements Listener {
             return;
         }
         e.setCancelled(true);
-        Entity rider = Bukkit.getEntity((UUID)this.bossUUID);
+        Entity rider = this.bossEntity;
         if (rider instanceof LivingEntity) {
             LivingEntity le = (LivingEntity)rider;
             le.damage(e.getFinalDamage());
@@ -345,34 +359,43 @@ implements Listener {
         return id != null && (id.equals(this.bossUUID) || id.equals(this.horseUUID));
     }
 
-    private void removeBoss() {
+    /** Folia hat den Boss-Tick fallen lassen, weil die Entity weg ist. */
+    private void onBossRetired() {
+        this.removeBoss();
+    }
+
+    private synchronized void removeBoss() {
         if (this.bossTickHandle != null) {
             this.bossTickHandle.cancel();
             this.bossTickHandle = null;
         }
-        UUID riderUUID = this.bossUUID;
-        UUID mountUUID = this.horseUUID;
-        Location loc = this.bossSpawnLoc;
+        Entity rider = this.bossEntity;
+        Entity mount = this.horseEntity;
         this.bossUUID = null;
         this.horseUUID = null;
-        this.bossSpawnLoc = null;
+        this.bossEntity = null;
+        this.horseEntity = null;
         this.forceSpawned = false;
-        if (loc != null && (riderUUID != null || mountUUID != null)) {
-            Scheduler.runAtLocation(this.plugin, loc, () -> {
-                Entity e;
-                if (riderUUID != null && (e = Bukkit.getEntity((UUID)riderUUID)) != null && e.isValid()) {
-                    e.remove();
-                }
-                if (mountUUID != null && (e = Bukkit.getEntity((UUID)mountUUID)) != null && e.isValid()) {
-                    e.remove();
-                }
-            });
-        }
+        this.despawn(rider);
+        this.despawn(mount);
         if (this.bossBar != null) {
             this.bossBar.removeAll();
             this.bossBar.setVisible(false);
             this.bossBar = null;
         }
+    }
+
+    // Über den Entity-Scheduler statt über die Spawn-Position: Der Reiter bewegt sich und kann
+    // längst in einer anderen Folia-Region stehen als dort, wo er gespawnt ist.
+    private void despawn(Entity entity) {
+        if (entity == null) {
+            return;
+        }
+        Scheduler.runOnEntity(this.plugin, entity, () -> {
+            if (entity.isValid() && !entity.isDead()) {
+                entity.remove();
+            }
+        });
     }
 
     private static ItemStack safeItem(String materialName) {

@@ -32,10 +32,12 @@
 package org.example.feature;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -75,7 +77,8 @@ public class HauntedNightManager {
     private final Plugin plugin;
     private BossBar bar;
     private Scheduler.TaskHandle tickTask;
-    private final Map<UUID, Integer> ghostCooldown = new HashMap<UUID, Integer>();
+    // stop() kommt vom Command-/Main-Thread, der Tick vom Global-Scheduler — beide fassen die Map an.
+    private final Map<UUID, Integer> ghostCooldown = new ConcurrentHashMap<UUID, Integer>();
     // Auf Folia mutieren Region-Thread-Lambdas die Liste, während der Global-Tick sie bereinigt.
     private final List<Entity> activeGhosts = new CopyOnWriteArrayList<Entity>();
     private final NamespacedKey GHOST_MARKER;
@@ -233,9 +236,19 @@ public class HauntedNightManager {
         }
     }
 
+    // Nur die Differenz schicken statt jede Sekunde alle Zuschauer zu entfernen und neu
+    // hinzuzufügen — das waren pro Spieler zwei überflüssige Pakete pro Sekunde.
     private void showBarFor(List<Player> players, double progress) {
-        this.bar.removeAll();
-        players.forEach(this.bar::addPlayer);
+        Set<Player> wanted = new HashSet<Player>(players);
+        Set<Player> current = new HashSet<Player>(this.bar.getPlayers());
+        for (Player p : current) {
+            if (wanted.contains(p)) continue;
+            this.bar.removePlayer(p);
+        }
+        for (Player p : wanted) {
+            if (current.contains(p)) continue;
+            this.bar.addPlayer(p);
+        }
         this.bar.setProgress(progress);
         if (!this.bar.isVisible()) {
             this.bar.setVisible(true);

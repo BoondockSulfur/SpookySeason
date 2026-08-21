@@ -19,6 +19,7 @@
  */
 package org.example.feature;
 
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -108,8 +109,7 @@ public class PumpkinRainManager {
                     }
                 }
                 catch (Exception e) {
-                    PumpkinRainManager.this.plugin.getLogger().warning("PumpkinRain tick error: " + e.getMessage());
-                    e.printStackTrace();
+                    PumpkinRainManager.this.plugin.getLogger().log(Level.WARNING, "PumpkinRain tick error", e);
                 }
             }
         }, 1L, period);

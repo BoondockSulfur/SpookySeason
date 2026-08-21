@@ -73,10 +73,13 @@ public class BatSwarmManager {
             if (!this.plugin.getConfig().getBoolean("batSwarm.enabled", true)) {
                 return;
             }
-            long currentTick = Bukkit.getCurrentTick();
+            // NICHT Bukkit.getCurrentTick(): das ist auf Folia nur innerhalb eines Region-Ticks
+            // gueltig und wirft im Global-Scheduler "No currently ticking region" — die Bat-Swarms
+            // sind daran auf Folia komplett gescheitert.
+            long now = System.currentTimeMillis();
             List<TrackedBat> expired = new ArrayList<TrackedBat>();
             for (TrackedBat tb : this.activeBats) {
-                if (tb.entity.isValid() && !tb.entity.isDead() && currentTick < tb.expiryTick) continue;
+                if (tb.entity.isValid() && !tb.entity.isDead() && now < tb.expiryMillis) continue;
                 if (tb.entity.isValid() && !tb.entity.isDead()) {
                     Scheduler.runAtLocation(this.plugin, tb.entity.getLocation(), () -> {
                         if (tb.entity.isValid() && !tb.entity.isDead()) {
@@ -89,13 +92,13 @@ public class BatSwarmManager {
             this.activeBats.removeAll(expired);
             double chance = this.plugin.getConfig().getDouble("batSwarm.spawnChance", 0.03);
             int batsPerSwarm = this.plugin.getConfig().getInt("batSwarm.batsPerSwarm", 8);
-            int lifetimeTicks = this.plugin.getConfig().getInt("batSwarm.lifetimeSeconds", 5) * 20;
+            long lifetimeMillis = (long)this.plugin.getConfig().getInt("batSwarm.lifetimeSeconds", 5) * 1000L;
             for (World w : Bukkit.getWorlds()) {
                 long time;
                 if (!SpookySeason.get().isWorldEnabled(w) || (time = w.getTime()) < 13000L || time > 23000L) continue;
                 for (Player p : w.getPlayers()) {
                     if (SpookySeason.get().prefs().isOptedOut(p.getUniqueId()) || ThreadLocalRandom.current().nextDouble() >= chance) continue;
-                    long expiry = currentTick + (long)lifetimeTicks;
+                    long expiry = now + lifetimeMillis;
                     int count = batsPerSwarm;
                     // Position einmal erfassen — der Spawn muss auf Folia in der Region der
                     // geplanten Location bleiben, auch wenn der Spieler weiterläuft.
@@ -125,7 +128,7 @@ public class BatSwarmManager {
         }
     }
 
-    private record TrackedBat(Entity entity, long expiryTick) {
+    private record TrackedBat(Entity entity, long expiryMillis) {
     }
 }
 
