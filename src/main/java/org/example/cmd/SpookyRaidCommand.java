@@ -1,7 +1,10 @@
 package org.example.cmd;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.Locale;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -10,7 +13,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.example.SpookySeason;
+import org.bukkit.configuration.ConfigurationSection;
 import org.example.feature.raid.RaidManager;
+import org.example.feature.raid.ZoneTarget;
 import org.example.lang.Lang;
 
 /**
@@ -20,9 +25,12 @@ import org.example.lang.Lang;
 public class SpookyRaidCommand
 implements CommandExecutor,
 TabCompleter {
-    private static final List<String> SUBS = List.of("start", "stop", "status", "target");
+    private static final List<String> SUBS = List.of("start", "stop", "status", "target", "zone");
     private static final List<String> TARGET_SUBS = List.of("info", "mode", "set", "add", "list", "remove", "clear", "region");
-    private static final List<String> MODES = List.of("objective", "region");
+    private static final List<String> MODES = List.of("objective", "zone", "region");
+    private static final List<String> ZONE_SUBS = List.of("pos1", "pos2", "save", "list", "remove");
+    /** Corner selections per player, in memory only - a restart simply forgets them. */
+    private static final Map<UUID, Location[]> SELECTION = new HashMap<UUID, Location[]>();
 
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("spooky.admin")) {
@@ -64,11 +72,94 @@ TabCompleter {
                 this.handleTarget(sender, label, args, plugin);
                 break;
             }
+            case "zone": {
+                this.handleZone(sender, label, args, plugin);
+                break;
+            }
             default: {
                 sender.sendMessage(Lang.get("command.unknown-arg", new String[0]));
             }
         }
         return true;
+    }
+
+    /** Zone setup: two corners, then save. Deliberately the same shape SiteZero uses for arenas. */
+    private void handleZone(CommandSender sender, String label, String[] args, SpookySeason plugin) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(Lang.get("command.volume.only-ingame", new String[0]));
+            return;
+        }
+        Player player = (Player)sender;
+        if (args.length < 2) {
+            sender.sendMessage(Lang.get("command.raid.zone-usage", "label", label));
+            return;
+        }
+        switch (args[1].toLowerCase(Locale.ROOT)) {
+            case "pos1":
+            case "pos2": {
+                boolean first = args[1].equalsIgnoreCase("pos1");
+                Location[] corners = SELECTION.computeIfAbsent(player.getUniqueId(), k -> new Location[2]);
+                corners[first ? 0 : 1] = player.getLocation();
+                sender.sendMessage(Lang.get(first ? "command.raid.zone-pos1" : "command.raid.zone-pos2",
+                        "x", String.valueOf(player.getLocation().getBlockX()),
+                        "y", String.valueOf(player.getLocation().getBlockY()),
+                        "z", String.valueOf(player.getLocation().getBlockZ())));
+                break;
+            }
+            case "save": {
+                if (args.length < 3) {
+                    sender.sendMessage(Lang.get("command.raid.zone-save-usage", "label", label));
+                    break;
+                }
+                Location[] corners = SELECTION.get(player.getUniqueId());
+                if (corners == null || corners[0] == null || corners[1] == null) {
+                    sender.sendMessage(Lang.get("command.raid.zone-need-corners", new String[0]));
+                    break;
+                }
+                if (!corners[0].getWorld().equals(corners[1].getWorld())) {
+                    sender.sendMessage(Lang.get("command.raid.zone-two-worlds", new String[0]));
+                    break;
+                }
+                String name = args[2].toLowerCase(Locale.ROOT);
+                plugin.getConfig().set("raid.target.zones." + name, ZoneTarget.format(corners[0], corners[1]));
+                plugin.getConfig().set("raid.target.zone.name", name);
+                plugin.getConfig().set("raid.target.mode", "zone");
+                plugin.saveConfig();
+                sender.sendMessage(Lang.get("command.raid.zone-saved", "zone", name));
+                break;
+            }
+            case "list": {
+                ConfigurationSection zones = plugin.getConfig().getConfigurationSection("raid.target.zones");
+                if (zones == null || zones.getKeys(false).isEmpty()) {
+                    sender.sendMessage(Lang.get("command.raid.zone-empty", new String[0]));
+                    break;
+                }
+                sender.sendMessage(Lang.get("command.raid.zone-list-header", new String[0]));
+                for (String key : zones.getKeys(false)) {
+                    sender.sendMessage(Lang.get("command.raid.zone-list-entry",
+                            "zone", key, "entry", zones.getString(key, "-")));
+                }
+                break;
+            }
+            case "remove": {
+                if (args.length < 3) {
+                    sender.sendMessage(Lang.get("command.raid.zone-remove-usage", "label", label));
+                    break;
+                }
+                String name = args[2].toLowerCase(Locale.ROOT);
+                if (plugin.getConfig().getString("raid.target.zones." + name) == null) {
+                    sender.sendMessage(Lang.get("command.raid.zone-unknown", "zone", name));
+                    break;
+                }
+                plugin.getConfig().set("raid.target.zones." + name, null);
+                plugin.saveConfig();
+                sender.sendMessage(Lang.get("command.raid.zone-removed", "zone", name));
+                break;
+            }
+            default: {
+                sender.sendMessage(Lang.get("command.raid.zone-usage", "label", label));
+            }
+        }
     }
 
     private void handleTarget(CommandSender sender, String label, String[] args, SpookySeason plugin) {
@@ -97,6 +188,13 @@ TabCompleter {
                                 "index", String.valueOf(i++), "entry", entry));
                     }
                 }
+                ConfigurationSection allZones = plugin.getConfig().getConfigurationSection("raid.target.zones");
+                String activeZone = plugin.getConfig().getString("raid.target.zone.name", "");
+                sender.sendMessage(Lang.get("command.raid.target-zone",
+                        "zone", SpookyRaidCommand.orDash(activeZone),
+                        "entry", allZones == null || activeZone.isEmpty()
+                                ? "-" : allZones.getString(activeZone, "-"),
+                        "limit", String.valueOf(plugin.getConfig().getInt("raid.target.zone.breachLimit", 0))));
                 sender.sendMessage(Lang.get("command.raid.target-region",
                         "world", SpookyRaidCommand.orDash(plugin.getConfig().getString("raid.target.region.world", "")),
                         "region", SpookyRaidCommand.orDash(plugin.getConfig().getString("raid.target.region.name", "")),
@@ -253,6 +351,15 @@ TabCompleter {
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("target") && args[1].equalsIgnoreCase("mode")) {
             return MODES.stream().filter(s -> s.startsWith(args[2].toLowerCase(Locale.ROOT))).toList();
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("zone")) {
+            return ZONE_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("zone") && args[1].equalsIgnoreCase("remove")) {
+            ConfigurationSection zones = SpookySeason.get().getConfig().getConfigurationSection("raid.target.zones");
+            if (zones != null) {
+                return zones.getKeys(false).stream().filter(s -> s.startsWith(args[2].toLowerCase(Locale.ROOT))).toList();
+            }
         }
         return List.of();
     }

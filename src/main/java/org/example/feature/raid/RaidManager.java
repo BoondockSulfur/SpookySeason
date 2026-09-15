@@ -264,6 +264,17 @@ public class RaidManager implements Listener {
         this.remainingSpawns.set(0);
         this.spawnsInFlight.set(0);
         this.spawnAttempts.set(0);
+        if (newTarget instanceof ZoneTarget) {
+            // A spawn ring inside the zone makes every attacker breach the moment it appears, and
+            // the raid is lost within seconds without a single mob ever walking.
+            double needed = ((ZoneTarget)newTarget).halfDiagonal();
+            if (cfgSnapshot.spawnRadiusMin < needed) {
+                this.plugin.getLogger().warning("Raid zone reaches " + Math.round(needed)
+                        + " blocks from its centre, but attackers spawn from "
+                        + Math.round(cfgSnapshot.spawnRadiusMin) + " blocks out - they will appear inside the"
+                        + " zone and count as breaches straight away. Raise raid.waves.spawnRadiusMin.");
+            }
+        }
         for (int wave = 1; wave <= cfgSnapshot.waveCount; ++wave) {
             int minimums = cfgSnapshot.minimumsForWave(wave);
             int quota = cfgSnapshot.quotaForWave(wave);
@@ -300,6 +311,11 @@ public class RaidManager implements Listener {
         String mode = cfg.getString("raid.target.mode", "objective");
         if ("region".equalsIgnoreCase(mode)) {
             return RegionTarget.from(this.plugin, cfg.getConfigurationSection("raid.target.region"));
+        }
+        if ("zone".equalsIgnoreCase(mode)) {
+            return ZoneTarget.from(this.plugin,
+                    cfg.getConfigurationSection("raid.target.zone"),
+                    cfg.getConfigurationSection("raid.target.zones"));
         }
         return ObjectiveTarget.from(this.plugin, cfg.getConfigurationSection("raid.target.objective"));
     }

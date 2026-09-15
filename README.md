@@ -59,7 +59,10 @@ Welt-Effekt und davon bewusst ausgenommen.
 | `/spookyraid target info` | `spooky.admin` | Zeigt Modus, Objekt-Position und Region des Ziels. |
 | `/spookyraid target mode <objective\|region>` | `spooky.admin` | Schaltet zwischen den beiden Ziel-Arten um. |
 | `/spookyraid target set` | `spooky.admin`, nur ingame | Setzt die Objekt-Position auf den eigenen Standort. |
-| `/spookyraid target region <Name>` | `spooky.admin`, nur ingame | Setzt die Ziel-Region (muss in der eigenen Welt existieren). |
+| `/spookyraid target region <Name>` | `spooky.admin`, nur ingame | Setzt die Ziel-Region aus WorldGuard (muss in der eigenen Welt existieren). |
+| `/spookyraid zone pos1` \| `pos2` | `spooky.admin`, nur ingame | Steckt die beiden Ecken einer eigenen Zone ab. |
+| `/spookyraid zone save <Name>` | `spooky.admin`, nur ingame | Speichert die Zone und wählt sie als Ziel aus. |
+| `/spookyraid zone list` \| `remove <Name>` | `spooky.admin` | Zeigt bzw. löscht eigene Zonen. |
 
 ## Rechte
 
@@ -112,7 +115,24 @@ Zwei Ziel-Arten, umschaltbar über `raid.target.mode`:
 | Modus | Ziel | Niederlage, wenn … |
 | --- | --- | --- |
 | `objective` | Ein oder **mehrere** Punkte mit eigenen Lebenspunkten. Die Lebenspunkte führt das Plugin selbst, sie sind daher frei wählbar und **nicht** auf 1024 gedeckelt. Angreifer richten Schaden über Nähe an (`reach`), nicht über echte Treffer. | je nach `lose`: alle / ein beliebiges / eine bestimmte Anzahl Ziele gefallen sind |
-| `region` | Eine benannte WorldGuard-Region. Jeder Angreifer, der hineinkommt, zählt als Durchbruch und verschwindet. | `breachLimit` Durchbrüche erreicht sind |
+| `zone` | Ein Quader, den du **selbst im Spiel absteckst** — kein Fremdplugin nötig. Jeder Angreifer, der hineinkommt, zählt als Durchbruch und verschwindet. | `breachLimit` Durchbrüche erreicht sind |
+| `region` | Wie `zone`, aber die Fläche kommt aus einer benannten **WorldGuard**-Region — für Server, die ihre Bereiche ohnehin dort pflegen. | `breachLimit` Durchbrüche erreicht sind |
+
+**Eigene Zonen** steckst du im Spiel ab, genau wie die Arenen in SiteZero:
+
+```
+/spookyraid zone pos1          an der einen Ecke
+/spookyraid zone pos2          an der gegenüberliegenden
+/spookyraid zone save dorf     speichert und wählt sie direkt aus
+/spooky reload
+```
+
+`/spookyraid zone list` zeigt alle, `remove <name>` löscht eine. Sie landen in
+`raid.target.zones` als `welt,x1,y1,z1,x2,y2,z2` und lassen sich dort auch von Hand pflegen.
+
+**Wichtig:** Der Spawn-Ring muss **außerhalb** der Zone liegen. Sonst erscheinen die Angreifer
+mittendrin, zählen sofort als Durchbruch und der Überfall ist in Sekunden verloren, ohne dass ein
+einziger Mob gelaufen ist. Das Plugin warnt beim Start mit der nötigen Mindestentfernung.
 
 Der `region`-Modus braucht WorldGuard **mit funktionierender Regions-Abfrage**; fehlt sie, meldet
 der Start das sauber zurück, statt still nichts zu tun.
