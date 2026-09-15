@@ -60,6 +60,15 @@ TabCompleter {
             }
             case "info": {
                 sender.sendMessage(Lang.get("command.boss.info-header", new String[0]));
+                // Live state first: the configured value only takes effect on the next spawn,
+                // and the pool is what the fight actually runs on.
+                if (plugin.boss() != null && plugin.boss().isActive()) {
+                    sender.sendMessage(Lang.get("command.boss.info-live",
+                            "health", String.valueOf(Math.round(plugin.boss().healthPool())),
+                            "max", String.valueOf(Math.round(plugin.boss().healthPoolMax()))));
+                } else {
+                    sender.sendMessage(Lang.get("command.boss.info-inactive", new String[0]));
+                }
                 sender.sendMessage("\u00a77enabled: \u00a7e" + cfg.getBoolean("halloweenBoss.enabled", true));
                 sender.sendMessage("\u00a77health: \u00a7e" + cfg.getDouble("halloweenBoss.health", 100.0));
                 sender.sendMessage("\u00a77damage: \u00a7e" + cfg.getDouble("halloweenBoss.damage", 8.0));
@@ -168,8 +177,8 @@ TabCompleter {
                     sender.sendMessage(Lang.get("command.boss.ability-usage", "label", label));
                     return true;
                 }
-                // Auf die kanonische Schreibweise normalisieren — sonst legt z.B.
-                // "witheronhit" einen toten Config-Key an, den der Code nie liest.
+                // Normalise to the canonical spelling — otherwise "witheronhit" and friends
+                // create a dead config key the code never reads.
                 String aKey = ABILITY_KEYS.stream().filter(k -> k.equalsIgnoreCase(args[1])).findFirst().orElse(args[1]);
                 String aVal = args[2];
                 String configPath = "halloweenBoss.abilities." + aKey;
@@ -316,7 +325,7 @@ TabCompleter {
     private static double parseDouble(String s, double def) {
         try {
             double v = Double.parseDouble(s);
-            // NaN besteht jeden Bereichsvergleich, Infinity ist als Attributwert ungültig.
+            // NaN passes every range comparison, and Infinity is invalid as an attribute value.
             return Double.isFinite(v) ? v : def;
         }
         catch (Exception e) {

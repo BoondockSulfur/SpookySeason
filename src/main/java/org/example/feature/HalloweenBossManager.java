@@ -61,6 +61,7 @@ import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
+import org.bukkit.EntityEffect;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -88,18 +89,26 @@ implements Listener {
     private final Plugin plugin;
     private Scheduler.TaskHandle tickTask;
     private Scheduler.TaskHandle bossTickHandle;
-    // Die Felder werden vom spawnenden Region-Thread geschrieben und aus Events sowie dem
-    // Entity-Tick anderer Threads gelesen — volatile für die Sichtbarkeit.
+    // Written by the spawning region thread and read from events and the entity tick on other
+    // threads — volatile for visibility.
     private volatile UUID bossUUID;
     private volatile UUID horseUUID;
-    // Direkte Referenzen statt Bukkit.getEntity(UUID): eine gehaltene Entity lässt sich über
-    // ihren eigenen Scheduler immer im richtigen Region-Thread anfassen, eine UUID nicht.
+    // Direct references rather than Bukkit.getEntity(UUID): a held entity can always be touched
+    // on the correct region thread through its own scheduler, a UUID cannot.
     private volatile Entity bossEntity;
     private volatile Entity horseEntity;
     private BossBar bossBar;
-    private int chargeCooldown;
-    private long respawnCooldownUntil;
+    // chargeCooldown runs on the entity tick, respawnCooldownUntil is set in the death event and
+    // read on the global tick — on Folia those are different threads.
+    private volatile int chargeCooldown;
+    private volatile long respawnCooldownUntil;
     private volatile boolean forceSpawned;
+    // The boss health the plugin tracks itself. The entity attribute behind it is capped at 1024
+    // by vanilla, which is nowhere near enough for a wave leader facing a full server, so the
+    // entity only ever holds one chunk of this pool and is topped back up as the pool drains.
+    private volatile double healthPool;
+    private volatile double healthPoolMax;
+    private volatile double entityMaxHealth;
 
     public HalloweenBossManager(Plugin plugin) {
         this.plugin = plugin;
@@ -146,8 +155,8 @@ implements Listener {
                 if (!SpookySeason.get().isWorldEnabled(w) || (time = w.getTime()) < 13000L || time > 23000L || (players = w.getPlayers()).isEmpty()) continue;
                 Player target = players.get(ThreadLocalRandom.current().nextInt(players.size()));
                 if (SpookySeason.get().prefs().isOptedOut(target.getUniqueId())) continue;
-                // Position einmal erfassen — der Spawn muss auf Folia in der Region der
-                // geplanten Location bleiben, auch wenn der Spieler weiterläuft.
+                // Capture the position once — on Folia the spawn has to stay in the region of
+                // the planned location, even if the player keeps walking.
                 Location targetLoc = target.getLocation();
                 Scheduler.runAtLocation(this.plugin, targetLoc, () -> {
                     Location loc = targetLoc.clone().add(ThreadLocalRandom.current().nextDouble(-15.0, 15.0), 0.0, ThreadLocalRandom.current().nextDouble(-15.0, 15.0));
@@ -176,9 +185,10 @@ implements Listener {
             }
             if (this.bossBar != null && boss instanceof LivingEntity) {
                 le = (LivingEntity)boss;
-                AttributeInstance maxAttr = le.getAttribute(Attributes.MAX_HEALTH);
-                if (maxAttr != null) {
-                    this.bossBar.setProgress(Math.max(0.0, Math.min(1.0, le.getHealth() / maxAttr.getValue())));
+                // Straight off the pool, not off the entity: the entity is refilled repeatedly,
+                // so its own health says nothing about how far along the fight is.
+                if (this.healthPoolMax > 0.0) {
+                    this.bossBar.setProgress(Math.max(0.0, Math.min(1.0, this.healthPool / this.healthPoolMax)));
                 }
                 Location bossLoc = boss.getLocation();
                 for (Player p : boss.getWorld().getPlayers()) {
@@ -190,8 +200,8 @@ implements Listener {
                     if (inRange || !this.bossBar.getPlayers().contains(p)) continue;
                     this.bossBar.removePlayer(p);
                 }
-                // Spieler, die die Welt verlassen haben, fallen aus der obigen Schleife heraus
-                // und würden die Bar sonst bis zum Boss-Tod behalten.
+                // Players who left the world drop out of the loop above and would otherwise keep
+                // the bar until the boss dies.
                 for (Player p : List.copyOf(this.bossBar.getPlayers())) {
                     if (p.getWorld().equals(boss.getWorld())) continue;
                     this.bossBar.removePlayer(p);
@@ -208,8 +218,8 @@ implements Listener {
                     }
                 }
             }
-            // Admin-Spawns (/spookyboss spawn) sind vom Auto-Despawn ausgenommen —
-            // sonst verschwindet ein außerhalb der Season/tagsüber erzwungener Boss nach 1s.
+            // Admin spawns (/spookyboss spawn) are exempt from the auto-despawn — otherwise a
+            // boss forced outside the season or during the day vanishes after one second.
             if (!this.forceSpawned && (!SpookySeason.get().isSeasonActive() || (time = boss.getWorld().getTime()) < 13000L || time > 23000L)) {
                 this.removeBoss();
             }
@@ -217,6 +227,31 @@ implements Listener {
         catch (Exception e) {
             this.plugin.getLogger().warning("Boss entity tick error: " + e.getMessage());
         }
+    }
+
+    /** True while a tracked boss is standing in the world. */
+    public boolean isActive() {
+        return this.bossUUID != null;
+    }
+
+    /**
+     * Spawns the boss at a fixed location instead of near a player, for events that dictate the
+     * place. Like {@link #forceSpawn(Player)} this counts as a forced spawn: no auto-despawn
+     * outside the season or during the day.
+     */
+    public void forceSpawnAt(Location location) {
+        this.removeBoss();
+        Location anchor = location.clone();
+        Scheduler.runAtLocation(this.plugin, anchor, () -> {
+            Location loc = anchor.clone();
+            loc.setY((double)(anchor.getWorld().getHighestBlockYAt(loc) + 1));
+            this.spawnBoss(loc, true);
+        });
+    }
+
+    /** Removes a running boss but leaves the auto-spawn tick alone. */
+    public void despawnBoss() {
+        this.removeBoss();
     }
 
     public void forceSpawn(Player player) {
@@ -230,8 +265,8 @@ implements Listener {
 
     private synchronized void spawnBoss(Location loc, boolean forced) {
         if (this.bossUUID != null) {
-            // Zwei gleichzeitige Spawn-Anläufe (Auto-Tick und /spookyboss spawn) würden sonst
-            // den ersten Boss als nicht mehr getrackte Waise zurücklassen.
+            // Two simultaneous spawn attempts (auto tick and /spookyboss spawn) would otherwise
+            // leave the first boss behind as an untracked orphan.
             return;
         }
         FileConfiguration cfg = this.plugin.getConfig();
@@ -245,16 +280,34 @@ implements Listener {
         horse.setTamed(true);
         horse.setAdult();
         horse.setInvulnerable(false);
-        horse.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(speed);
+        this.setBaseValue(horse, Attributes.MOVEMENT_SPEED, speed, "movement_speed");
         horse.customName(((TextComponent)Component.text((String)bossName).color((TextColor)NamedTextColor.DARK_RED)).decorate(TextDecoration.BOLD));
-        WitherSkeleton rider = (WitherSkeleton)w.spawnEntity(loc, EntityType.WITHER_SKELETON);
+        WitherSkeleton rider;
+        try {
+            rider = (WitherSkeleton)w.spawnEntity(loc, EntityType.WITHER_SKELETON);
+        }
+        catch (RuntimeException e) {
+            // The rider cannot always be placed — on Peaceful difficulty the server refuses every
+            // monster spawn. Without this cleanup the horse that already spawned would be left
+            // standing in the world as a marked, untracked orphan.
+            horse.remove();
+            throw e;
+        }
         rider.getPersistentDataContainer().set(SpookySeason.get().entityMarker(), PersistentDataType.BYTE, (byte)1);
         rider.customName(((TextComponent)Component.text((String)bossName).color((TextColor)NamedTextColor.DARK_RED)).decorate(TextDecoration.BOLD));
         rider.setCustomNameVisible(true);
         rider.setGlowing(true);
-        rider.getAttribute(Attributes.MAX_HEALTH).setBaseValue(health);
-        rider.setHealth(health);
-        rider.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(damage);
+        this.healthPoolMax = Math.max(1.0, health);
+        this.healthPool = this.healthPoolMax;
+        // The entity itself carries at most one chunk of the pool, because vanilla refuses a
+        // max_health above 1024. Everything beyond that lives in healthPool.
+        this.setBaseValue(rider, Attributes.MAX_HEALTH, Math.min(health, 1024.0), "max_health");
+        // Never set above the actual maximum: if max_health could not be adjusted, setHealth()
+        // throws and the spawn breaks off halfway through.
+        AttributeInstance riderMax = rider.getAttribute(Attributes.MAX_HEALTH);
+        this.entityMaxHealth = riderMax == null ? rider.getHealth() : riderMax.getValue();
+        rider.setHealth(this.entityMaxHealth);
+        this.setBaseValue(rider, Attributes.ATTACK_DAMAGE, damage, "attack_damage");
         EntityEquipment eq = rider.getEquipment();
         if (eq != null) {
             eq.setHelmet(HalloweenBossManager.safeItem(cfg.getString("halloweenBoss.armor.helmet", "CARVED_PUMPKIN")));
@@ -286,11 +339,67 @@ implements Listener {
             p.sendMessage(Lang.get("boss.spawn", new String[0]));
         }
         w.strikeLightningEffect(loc);
-        // Retired-Callback: Auf Folia hängt der Boss-Tick an der Entity und verschwindet mit ihr
-        // (Chunk-Entladung, Tod). Ohne Aufräumen bliebe bossUUID gesetzt und es spawnte bis zum
-        // Neustart nie wieder ein Boss.
+        // Retired callback: on Folia the boss tick hangs off the entity and disappears with it
+        // (chunk unload, death). Without cleanup bossUUID would stay set and no boss would ever
+        // spawn again until a restart.
         this.bossTickHandle = Scheduler.runEntityTimer(this.plugin, (Entity)rider, this::bossTick, this::onBossRetired, 20L, 20L);
         SpookySeason.get().haunted().refreshBar();
+    }
+
+    /**
+     * Runs the boss health off the plugin's own pool instead of the entity attribute.
+     *
+     * <p>Vanilla caps {@code max_health} at 1024. Rather than fight that, the entity holds one
+     * chunk of the pool: a blow that would kill it is cancelled and its health topped back up
+     * while reserves remain, and once the pool is empty the next blow is allowed to finish it.
+     * Hit feedback, knockback and the shared horse/rider pool all keep working as before.
+     */
+    @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
+    public void onBossDamaged(EntityDamageEvent e) {
+        UUID id = this.bossUUID;
+        if (id == null || !e.getEntity().getUniqueId().equals(id)) {
+            return;
+        }
+        if (!(e.getEntity() instanceof LivingEntity)) {
+            return;
+        }
+        LivingEntity le = (LivingEntity)e.getEntity();
+        double dealt = e.getFinalDamage();
+        double left = this.healthPool - dealt;
+        if (this.plugin.getConfig().getBoolean("raid.debug", false)) {
+            this.plugin.getLogger().info("[boss-debug] cause=" + e.getCause()
+                    + " raw=" + e.getDamage() + " final=" + dealt
+                    + " entityHealth=" + le.getHealth() + "/" + this.entityMaxHealth
+                    + " pool=" + this.healthPool + " -> " + Math.max(0.0, left));
+        }
+        this.healthPool = Math.max(0.0, left);
+        if (left > 0.0 && le.getHealth() - dealt <= 0.0) {
+            e.setCancelled(true);
+            Scheduler.runOnEntity(this.plugin, le, () -> {
+                if (le.isValid() && !le.isDead()) {
+                    le.setHealth(this.entityMaxHealth);
+                    le.playEffect(EntityEffect.HURT);
+                }
+            });
+            return;
+        }
+        if (left <= 0.0 && le.getHealth() - dealt > 0.0) {
+            // Pool spent but the entity would shrug this one off - finish it on the next tick.
+            Scheduler.runEntityLater(this.plugin, le, () -> {
+                if (le.isValid() && !le.isDead()) {
+                    le.setHealth(0.0);
+                }
+            }, 1L);
+        }
+    }
+
+    /** Remaining boss health from the plugin pool, for status output. */
+    public double healthPool() {
+        return this.healthPool;
+    }
+
+    public double healthPoolMax() {
+        return this.healthPoolMax;
     }
 
     @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
@@ -328,7 +437,7 @@ implements Listener {
         }
     }
 
-    @EventHandler(ignoreCancelled=true)
+    @EventHandler
     public void onBossDeath(EntityDeathEvent e) {
         if (this.bossUUID == null) {
             return;
@@ -359,7 +468,7 @@ implements Listener {
         return id != null && (id.equals(this.bossUUID) || id.equals(this.horseUUID));
     }
 
-    /** Folia hat den Boss-Tick fallen lassen, weil die Entity weg ist. */
+    /** Folia dropped the boss tick because the entity is gone. */
     private void onBossRetired() {
         this.removeBoss();
     }
@@ -376,6 +485,8 @@ implements Listener {
         this.bossEntity = null;
         this.horseEntity = null;
         this.forceSpawned = false;
+        this.healthPool = 0.0;
+        this.healthPoolMax = 0.0;
         this.despawn(rider);
         this.despawn(mount);
         if (this.bossBar != null) {
@@ -385,8 +496,8 @@ implements Listener {
         }
     }
 
-    // Über den Entity-Scheduler statt über die Spawn-Position: Der Reiter bewegt sich und kann
-    // längst in einer anderen Folia-Region stehen als dort, wo er gespawnt ist.
+    // Through the entity scheduler rather than the spawn position: the rider moves and may long
+    // since be standing in a different Folia region than where it spawned.
     private void despawn(Entity entity) {
         if (entity == null) {
             return;
@@ -396,6 +507,20 @@ implements Listener {
                 entity.remove();
             }
         });
+    }
+
+    /**
+     * Sets an attribute base value, provided the entity has that attribute at all. Without the
+     * null check a missing attribute tears the spawn apart halfway through, leaving the horse that
+     * already spawned behind as a marked, untracked orphan.
+     */
+    private void setBaseValue(LivingEntity entity, Attribute attribute, double value, String label) {
+        AttributeInstance attr = entity.getAttribute(attribute);
+        if (attr == null) {
+            this.plugin.getLogger().warning("Boss entity is missing the " + label + " attribute - keeping the vanilla value.");
+            return;
+        }
+        attr.setBaseValue(value);
     }
 
     private static ItemStack safeItem(String materialName) {
