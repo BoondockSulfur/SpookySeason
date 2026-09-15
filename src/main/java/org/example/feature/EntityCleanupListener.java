@@ -17,16 +17,19 @@ implements Listener {
         this.plugin = plugin;
     }
 
-    // Markierte Plugin-Entities sind persistent: Ein Boss aus einem entladenen Chunk oder
-    // Reste nach Shutdown/Crash tauchen sonst als verwaiste Mobs (ohne BossBar/Loot-Handling)
-    // wieder auf. Alles, was beim Chunk-Load nicht mehr getrackt ist, wird entfernt.
+    // Marked plugin entities are persistent: a boss from an unloaded chunk, or leftovers from a
+    // shutdown or crash, would otherwise reappear as orphaned mobs with no bossbar and no loot
+    // handling. Anything no longer tracked at chunk load time is removed.
     @EventHandler
     public void onEntitiesLoad(EntitiesLoadEvent e) {
         for (Entity entity : e.getEntities()) {
             if (!entity.getPersistentDataContainer().has(this.plugin.entityMarker(), PersistentDataType.BYTE)) continue;
             if (this.plugin.boss() != null && this.plugin.boss().isTracked(entity.getUniqueId())) continue;
-            // Einen Tick später entfernen: Entities mitten im Ladevorgang zu löschen, ist
-            // heikel — der Server ist mit genau dieser Liste gerade selbst beschäftigt.
+            // A running raid's attackers and target are tracked and must not vanish mid-assault
+            // just because their chunk was reloaded.
+            if (this.plugin.raid() != null && this.plugin.raid().isTracked(entity.getUniqueId())) continue;
+            // Remove one tick later: deleting entities in the middle of the load is delicate —
+            // the server is busy with this very list at that moment.
             Scheduler.runEntityLater(this.plugin, entity, () -> {
                 if (entity.isValid() && !entity.isDead()) {
                     entity.remove();
@@ -35,8 +38,8 @@ implements Listener {
         }
     }
 
-    // Hopper ignorieren das Pickup-Delay der Kürbisregen-Items — ohne diesen Cancel
-    // lassen sich die Deko-Drops mit einem Hopper-Feld farmen.
+    // Hoppers ignore the pickup delay on pumpkin rain items — without this cancel the decorative
+    // drops can be farmed with a field of hoppers.
     @EventHandler(ignoreCancelled=true)
     public void onHopperPickup(InventoryPickupItemEvent e) {
         if (e.getItem().getPersistentDataContainer().has(this.plugin.entityMarker(), PersistentDataType.BYTE)) {

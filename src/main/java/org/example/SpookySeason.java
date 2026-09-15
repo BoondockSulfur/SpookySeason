@@ -35,6 +35,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.example.cmd.PumpkinRainCommand;
 import org.example.cmd.SpookyBossCommand;
+import org.example.cmd.SpookyRaidCommand;
 import org.example.cmd.SpookyToggleCommand;
 import org.example.cmd.SpookyVolumeCommand;
 import org.bstats.bukkit.Metrics;
@@ -50,6 +51,7 @@ import org.example.feature.PumpkinRainManager;
 import org.example.feature.SeasonRewardManager;
 import org.example.feature.SpookyMenuGUI;
 import org.example.feature.TrickOrTreatListener;
+import org.example.feature.raid.RaidManager;
 import org.example.integration.CustomJukeboxHook;
 import org.example.integration.RegionIntegration;
 import org.example.integration.SpookyPlaceholders;
@@ -65,6 +67,8 @@ public final class SpookySeason
 extends JavaPlugin {
     private static SpookySeason instance;
     private NamespacedKey entityMarker;
+    private NamespacedKey ghostMarker;
+    private NamespacedKey raidMarker;
     private HauntedNightManager hauntedNightManager;
     private PumpkinRainManager pumpkinRainManager;
     private HalloweenBossManager bossManager;
@@ -75,6 +79,7 @@ extends JavaPlugin {
     private PlayerStats stats;
     private RegionIntegration regionIntegration;
     private CustomJukeboxHook customJukeboxHook;
+    private RaidManager raidManager;
 
     public static SpookySeason get() {
         return instance;
@@ -82,6 +87,16 @@ extends JavaPlugin {
 
     public NamespacedKey entityMarker() {
         return this.entityMarker;
+    }
+
+    /** Marks the vex ghosts of a blood moon night — in addition to the general entityMarker. */
+    public NamespacedKey ghostMarker() {
+        return this.ghostMarker;
+    }
+
+    /** Marks a raid's attackers and target — in addition to the entityMarker. */
+    public NamespacedKey raidMarker() {
+        return this.raidMarker;
     }
 
     public PlayerPrefs prefs() {
@@ -120,12 +135,18 @@ extends JavaPlugin {
         return this.menuGUI;
     }
 
+    public RaidManager raid() {
+        return this.raidManager;
+    }
+
     public void onEnable() {
         instance = this;
-        // Löst die Attribute über die Registry auf (1.21.x- und 26.x-Keys) —
-        // schlägt das fehl, soll es sofort hier knallen, nicht erst beim Boss-Spawn.
+        // Resolves the attributes through the registry (1.21.x and 26.x keys). If that fails it
+        // should blow up right here, not later during a boss spawn.
         Attributes.init();
         this.entityMarker = new NamespacedKey((Plugin)this, "spooky_entity");
+        this.ghostMarker = new NamespacedKey((Plugin)this, "spooky_ghost");
+        this.raidMarker = new NamespacedKey((Plugin)this, "spooky_raid");
         this.saveDefaultConfig();
         ConfigMerger.merge((Plugin)this, "config.yml", new File(this.getDataFolder(), "config.yml"));
         this.reloadConfig();
@@ -140,10 +161,12 @@ extends JavaPlugin {
         this.batSwarmManager = new BatSwarmManager((Plugin)this);
         this.rewardManager = new SeasonRewardManager((Plugin)this);
         this.menuGUI = new SpookyMenuGUI();
+        this.raidManager = new RaidManager((Plugin)this);
         this.registerCommand("pumpkinrain", new PumpkinRainCommand(this.pumpkinRainManager));
         this.registerCommand("spooky", new SpookyToggleCommand());
         this.registerCommand("spookyvolume", new SpookyVolumeCommand());
         this.registerCommand("spookyboss", new SpookyBossCommand());
+        this.registerCommand("spookyraid", new SpookyRaidCommand());
         Bukkit.getPluginManager().registerEvents((Listener)new TrickOrTreatListener(this), (Plugin)this);
         Bukkit.getPluginManager().registerEvents((Listener)new GhostListener(), (Plugin)this);
         Bukkit.getPluginManager().registerEvents((Listener)new JumpScareListener(this), (Plugin)this);
@@ -151,11 +174,13 @@ extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents((Listener)this.bossManager, (Plugin)this);
         Bukkit.getPluginManager().registerEvents((Listener)this.rewardManager, (Plugin)this);
         Bukkit.getPluginManager().registerEvents((Listener)this.menuGUI, (Plugin)this);
+        Bukkit.getPluginManager().registerEvents((Listener)this.raidManager, (Plugin)this);
         Bukkit.getPluginManager().registerEvents((Listener)new EntityCleanupListener(this), (Plugin)this);
         this.hauntedNightManager.start();
         this.bossManager.start();
         this.batSwarmManager.start();
         this.rewardManager.start();
+        this.raidManager.start();
         Metrics metrics = new Metrics((Plugin)this, 30933);
         metrics.addCustomChart(new SimplePie("language", () -> this.getConfig().getString("language", "en")));
         metrics.addCustomChart(new SimplePie("season_active", () -> this.isSeasonActive() ? "active" : "inactive"));
@@ -171,13 +196,14 @@ extends JavaPlugin {
     }
 
     public void onDisable() {
-        // Jeder stop() einzeln abgesichert — ein Fehler (z.B. abgelehntes Scheduling
-        // auf Folia) darf das restliche Cleanup nicht abbrechen.
+        // Every stop() is guarded separately — one failure (rejected scheduling on Folia, say)
+        // must not abort the rest of the cleanup.
         this.safeStop(this.hauntedNightManager == null ? null : this.hauntedNightManager::stop, "hauntedNight");
         this.safeStop(this.pumpkinRainManager == null ? null : this.pumpkinRainManager::stop, "pumpkinRain");
         this.safeStop(this.bossManager == null ? null : this.bossManager::stop, "boss");
         this.safeStop(this.batSwarmManager == null ? null : this.batSwarmManager::stop, "batSwarm");
         this.safeStop(this.rewardManager == null ? null : this.rewardManager::stop, "rewards");
+        this.safeStop(this.raidManager == null ? null : this.raidManager::stop, "raid");
         if (this.prefs != null) {
             this.prefs.flush();
         }
@@ -211,15 +237,18 @@ extends JavaPlugin {
         if (this.batSwarmManager != null) {
             this.batSwarmManager.stop();
         }
+        if (this.raidManager != null) {
+            this.raidManager.stop();
+        }
         this.removeAllPluginEntities();
     }
 
     public void removeAllPluginEntities() {
         if (Scheduler.isFolia()) {
-            // Auf Folia gehört die Entity-Liste einer Welt keinem einzelnen Thread — sie lässt
-            // sich regionsübergreifend nicht sicher durchgehen. Die aktiven Entities räumen die
-            // Manager in stopAll() selbst ab; verwaiste Reste (Crash, alte Chunks) entfernt der
-            // EntityCleanupListener beim nächsten Chunk-Load.
+            // On Folia a world's entity list belongs to no single thread and cannot be walked
+            // safely across regions. The managers clear their own active entities in stopAll();
+            // orphans left over from a crash or old chunks are removed by EntityCleanupListener
+            // on the next chunk load.
             return;
         }
         for (World w : Bukkit.getWorlds()) {
@@ -244,6 +273,9 @@ extends JavaPlugin {
         if (this.rewardManager != null) {
             this.rewardManager.start();
         }
+        if (this.raidManager != null) {
+            this.raidManager.start();
+        }
     }
 
     public void reload() {
@@ -254,6 +286,9 @@ extends JavaPlugin {
         this.bossManager.start();
         this.batSwarmManager.start();
         this.rewardManager.start();
+        // Deliberately only the ticker: a running raid carries on with its frozen configuration
+        // snapshot and is not torn down by a reload.
+        this.raidManager.start();
     }
 
     public boolean isSeasonActive() {
@@ -261,9 +296,11 @@ extends JavaPlugin {
     }
 
     /**
-     * Nur das Kalenderfenster, ohne den manuellen {@code active}-Schalter.
-     * Die Season-End-Rewards hängen bewusst hieran: Sonst zählt ein {@code /spooky off} mitten
-     * in der Season als Season-Ende — mit Reward-Verteilung und zurückgesetzter Treat-Statistik.
+     * The calendar window only, without the manual {@code active} switch.
+     *
+     * <p>The season-end rewards deliberately hang off this: otherwise a {@code /spooky off} in the
+     * middle of the season would count as the season ending, handing out rewards and resetting the
+     * treat statistics.
      */
     public boolean isInSeasonWindow() {
         FileConfiguration cfg = this.getConfig();
