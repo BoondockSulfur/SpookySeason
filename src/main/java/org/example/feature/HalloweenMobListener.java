@@ -67,7 +67,7 @@ implements Listener {
         }
     }
 
-    @EventHandler(ignoreCancelled=true)
+    @EventHandler
     public void onEntityDeath(EntityDeathEvent e) {
         if (!this.plugin.isSeasonActive()) {
             return;

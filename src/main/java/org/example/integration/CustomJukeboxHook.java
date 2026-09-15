@@ -82,8 +82,10 @@ public class CustomJukeboxHook {
         try {
             this.stopPlaybackMethod.invoke(this.api, location);
         }
-        catch (Exception exception) {
-            // empty catch block
+        catch (Exception e) {
+            // Do not swallow this: if playback gets stuck, the ambient track keeps running past
+            // the end of the season or the night and nobody can see why.
+            this.plugin.getLogger().warning("CustomJukebox stopPlayback failed: " + e.getMessage());
         }
     }
 

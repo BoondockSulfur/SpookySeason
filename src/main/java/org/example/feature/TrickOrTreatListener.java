@@ -76,7 +76,7 @@ import org.example.util.Scheduler;
 public class TrickOrTreatListener
 implements Listener {
     private final SpookySeason plugin;
-    // Events kommen auf Folia von unterschiedlichen Region-Threads.
+    // On Folia, events arrive from different region threads.
     private final Map<String, Long> cooldown = new ConcurrentHashMap<String, Long>();
 
     public TrickOrTreatListener(SpookySeason plugin) {
@@ -98,8 +98,8 @@ implements Listener {
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-        // Interact-Events feuern pro Hand; ohne Filter läuft der Off-Hand-Klick
-        // direkt in den frisch gesetzten Cooldown und spammt die Cooldown-Meldung.
+        // Interact events fire once per hand; without this filter the off-hand click runs
+        // straight into the cooldown just set and spams the cooldown message.
         if (e.getHand() != EquipmentSlot.HAND) {
             return;
         }
@@ -145,6 +145,12 @@ implements Listener {
         }
         Villager villager = (Villager)entity;
         Player p = e.getPlayer();
+        // Sneaking always means trading: without this escape hatch every villager swallows the
+        // trading right-click once per cooldown window, with no way for the player to work
+        // around it deliberately.
+        if (p.isSneaking() && this.plugin.getConfig().getBoolean("trickOrTreatVillagers.sneakToTrade", true)) {
+            return;
+        }
         if (this.plugin.prefs().isOptedOut(p.getUniqueId())) {
             return;
         }
@@ -153,8 +159,8 @@ implements Listener {
         }
         String key = this.villagerCooldownKey(p.getUniqueId(), villager);
         if (!this.checkCooldown(p, key)) {
-            // Kein Trick-or-Treat (Cooldown läuft noch) → Event NICHT abbrechen. Sonst wäre der
-            // Handel mit Villagern die ganze Season über komplett blockiert.
+            // No trick-or-treat (cooldown still running) means the event is NOT cancelled.
+            // Otherwise trading with villagers would be blocked for the whole season.
             return;
         }
         e.setCancelled(true);
@@ -164,8 +170,8 @@ implements Listener {
     private boolean checkCooldown(Player p, String key) {
         long now = System.currentTimeMillis();
         this.cooldown.entrySet().removeIf(entry -> (Long)entry.getValue() < now);
-        // Zusätzlich zum Pro-Tür/Villager-Cooldown ein globaler Pro-Spieler-Cooldown,
-        // sonst lässt sich mit vielen Türen unbegrenzt für die Season-Rewards farmen.
+        // On top of the per-door/villager cooldown there is a global per-player one; otherwise a
+        // row of doors allows unlimited farming for the season rewards.
         String globalKey = String.valueOf(p.getUniqueId()) + ":global";
         if (now < this.cooldown.getOrDefault(key, 0L) || now < this.cooldown.getOrDefault(globalKey, 0L)) {
             p.sendMessage(Lang.get("trickortreat.cooldown", new String[0]));

@@ -37,7 +37,7 @@ import org.example.util.Scheduler;
 public class BatSwarmManager {
     private final Plugin plugin;
     private Scheduler.TaskHandle tickTask;
-    // Auf Folia mutieren Region-Thread-Lambdas die Liste, während der Global-Tick sie bereinigt.
+    // On Folia, region-thread lambdas mutate this list while the global tick prunes it.
     private final List<TrackedBat> activeBats = new CopyOnWriteArrayList<TrackedBat>();
 
     public BatSwarmManager(Plugin plugin) {
@@ -56,7 +56,9 @@ public class BatSwarmManager {
         }
         for (TrackedBat tb : this.activeBats) {
             if (!tb.entity.isValid() || tb.entity.isDead()) continue;
-            Scheduler.runAtLocation(this.plugin, tb.entity.getLocation(), () -> {
+            // Entity scheduler rather than runAtLocation: the bat flies and is no longer
+            // necessarily in the region it spawned in.
+            Scheduler.runOnEntity(this.plugin, tb.entity, () -> {
                 if (tb.entity.isValid() && !tb.entity.isDead()) {
                     tb.entity.remove();
                 }
@@ -73,15 +75,15 @@ public class BatSwarmManager {
             if (!this.plugin.getConfig().getBoolean("batSwarm.enabled", true)) {
                 return;
             }
-            // NICHT Bukkit.getCurrentTick(): das ist auf Folia nur innerhalb eines Region-Ticks
-            // gueltig und wirft im Global-Scheduler "No currently ticking region" — die Bat-Swarms
-            // sind daran auf Folia komplett gescheitert.
+            // NOT Bukkit.getCurrentTick(): on Folia that is only valid inside a region tick and
+            // throws "No currently ticking region" on the global scheduler — it broke bat swarms
+            // on Folia completely.
             long now = System.currentTimeMillis();
             List<TrackedBat> expired = new ArrayList<TrackedBat>();
             for (TrackedBat tb : this.activeBats) {
                 if (tb.entity.isValid() && !tb.entity.isDead() && now < tb.expiryMillis) continue;
                 if (tb.entity.isValid() && !tb.entity.isDead()) {
-                    Scheduler.runAtLocation(this.plugin, tb.entity.getLocation(), () -> {
+                    Scheduler.runOnEntity(this.plugin, tb.entity, () -> {
                         if (tb.entity.isValid() && !tb.entity.isDead()) {
                             tb.entity.remove();
                         }
@@ -100,8 +102,8 @@ public class BatSwarmManager {
                     if (SpookySeason.get().prefs().isOptedOut(p.getUniqueId()) || ThreadLocalRandom.current().nextDouble() >= chance) continue;
                     long expiry = now + lifetimeMillis;
                     int count = batsPerSwarm;
-                    // Position einmal erfassen — der Spawn muss auf Folia in der Region der
-                    // geplanten Location bleiben, auch wenn der Spieler weiterläuft.
+                    // Capture the position once — on Folia the spawn has to stay in the region
+                    // of the planned location, even if the player keeps walking.
                     Location anchor = p.getLocation();
                     Scheduler.runAtLocation(this.plugin, anchor, () -> {
                         if (!p.isOnline()) {

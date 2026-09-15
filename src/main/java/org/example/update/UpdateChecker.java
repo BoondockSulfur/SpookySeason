@@ -21,6 +21,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,8 +36,10 @@ import org.example.util.Scheduler;
 public class UpdateChecker
 implements Listener {
     private static final String MODRINTH_API = "https://api.modrinth.com/v2/project/spookyseason/version?limit=1";
+    private static final String MODRINTH_VERSION_URL = "https://modrinth.com/project/spookyseason/version/";
+    private static final String CURSEFORGE_URL = "https://www.curseforge.com/minecraft/bukkit-plugins/spookyseason/files";
     private final Plugin plugin;
-    // Im Async-Thread geschrieben, im Join-Event gelesen — volatile für die Sichtbarkeit.
+    // Written on the async thread, read in the join event — volatile for visibility.
     private volatile String latestVersion;
     private volatile String downloadUrl;
     private volatile boolean updateAvailable;
@@ -58,7 +64,7 @@ implements Listener {
                 String currentVersion = this.plugin.getDescription().getVersion();
                 if (UpdateChecker.isNewer(remoteVersion, currentVersion)) {
                     this.latestVersion = remoteVersion;
-                    this.downloadUrl = "https://modrinth.com/project/spookyseason/version/" + remoteVersion;
+                    this.downloadUrl = MODRINTH_VERSION_URL + remoteVersion;
                     this.updateAvailable = true;
                     this.plugin.getLogger().info("New version available: " + remoteVersion + " (current: " + currentVersion + ")");
                 }
@@ -70,8 +76,8 @@ implements Listener {
     }
 
     /**
-     * Vergleicht der Reihe nach die Zahlenblöcke. Ein reiner Ungleichheitstest würde auch dann
-     * ein „Update" melden, wenn auf Modrinth eine ältere Version obenauf liegt.
+     * Compares the numeric blocks in order. A plain inequality test would report an "update" even
+     * when the newest thing on Modrinth is actually an older version.
      */
     static boolean isNewer(String remote, String local) {
         int[] r = UpdateChecker.parseVersion(remote);
@@ -87,7 +93,7 @@ implements Listener {
         return false;
     }
 
-    /** "v1.2.3-beta.2" → [1, 2, 3]; alles ab dem ersten Suffix wird verworfen. */
+    /** "v1.2.3-beta.2" becomes [1, 2, 3]; everything from the first suffix on is discarded. */
     private static int[] parseVersion(String version) {
         if (version == null) {
             return new int[0];
@@ -127,10 +133,32 @@ implements Listener {
         }
         Scheduler.runLater(this.plugin, () -> {
             if (p.isOnline()) {
-                p.sendMessage(Lang.get("update.available", "version", this.latestVersion));
-                p.sendMessage(Lang.get("update.download", "url", this.downloadUrl));
+                p.sendMessage(UpdateChecker.legacy(Lang.get("update.available", "version", this.latestVersion)));
+                p.sendMessage(UpdateChecker.downloadLine(this.downloadUrl));
             }
         }, 40L);
+    }
+
+    /**
+     * The download line as clickable components rather than a typed-out URL, and both stores, so
+     * the notice does not tie anyone to a single source.
+     */
+    private static Component downloadLine(String modrinthUrl) {
+        return UpdateChecker.legacy(Lang.get("update.download-prefix", new String[0]))
+                .append(UpdateChecker.link(Lang.get("update.modrinth", new String[0]), modrinthUrl))
+                .append(Component.text(" "))
+                .append(UpdateChecker.link(Lang.get("update.curseforge", new String[0]), CURSEFORGE_URL));
+    }
+
+    private static Component link(String label, String url) {
+        return UpdateChecker.legacy(label)
+                .clickEvent(ClickEvent.openUrl(url))
+                .hoverEvent(HoverEvent.showText(Component.text(url)));
+    }
+
+    /** The language files use section-sign codes; those have to be translated for components. */
+    private static Component legacy(String text) {
+        return LegacyComponentSerializer.legacySection().deserialize(text);
     }
 }
 

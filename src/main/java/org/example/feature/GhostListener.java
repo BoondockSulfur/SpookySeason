@@ -11,7 +11,6 @@
  *  org.bukkit.event.entity.EntityDamageByEntityEvent
  *  org.bukkit.event.entity.EntityTargetEvent
  *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
  */
 package org.example.feature;
 
@@ -24,12 +23,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.Plugin;
 import org.example.SpookySeason;
 
 public class GhostListener
 implements Listener {
-    private final NamespacedKey KEY = new NamespacedKey((Plugin)SpookySeason.get(), "spooky_ghost");
+    private final NamespacedKey KEY = SpookySeason.get().ghostMarker();
 
     private boolean isSpookyGhost(Entity e) {
         return e.getType() == EntityType.VEX && e.getPersistentDataContainer().has(this.KEY, PersistentDataType.BYTE);

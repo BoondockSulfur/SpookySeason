@@ -9,7 +9,6 @@
  *  net.kyori.adventure.text.format.TextDecoration
  *  org.bukkit.Bukkit
  *  org.bukkit.Location
- *  org.bukkit.NamespacedKey
  *  org.bukkit.Particle
  *  org.bukkit.Sound
  *  org.bukkit.SoundCategory
@@ -46,7 +45,6 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
@@ -77,11 +75,10 @@ public class HauntedNightManager {
     private final Plugin plugin;
     private BossBar bar;
     private Scheduler.TaskHandle tickTask;
-    // stop() kommt vom Command-/Main-Thread, der Tick vom Global-Scheduler — beide fassen die Map an.
+    // stop() comes from the command/main thread, the tick from the global scheduler — both touch this map.
     private final Map<UUID, Integer> ghostCooldown = new ConcurrentHashMap<UUID, Integer>();
-    // Auf Folia mutieren Region-Thread-Lambdas die Liste, während der Global-Tick sie bereinigt.
+    // On Folia, region-thread lambdas mutate this list while the global tick prunes it.
     private final List<Entity> activeGhosts = new CopyOnWriteArrayList<Entity>();
-    private final NamespacedKey GHOST_MARKER;
     private boolean enabled;
     private double cfgAmbientVol;
     private double cfgGhostVol;
@@ -100,7 +97,6 @@ public class HauntedNightManager {
         this.loadConfig();
         this.bar = Bukkit.createBossBar((String)Lang.get("haunted.bossbar", new String[0]), (BarColor)BarColor.PURPLE, (BarStyle)BarStyle.SEGMENTED_10, (BarFlag[])new BarFlag[0]);
         this.bar.setVisible(false);
-        this.GHOST_MARKER = new NamespacedKey(plugin, "spooky_ghost");
     }
 
     private void loadConfig() {
@@ -138,8 +134,10 @@ public class HauntedNightManager {
     private void removeAllGhosts() {
         for (Entity ghost : this.activeGhosts) {
             if (!ghost.isValid() || ghost.isDead()) continue;
-            // Auf Folia darf remove() nur vom Region-Thread des Ghosts laufen.
-            Scheduler.runAtLocation(this.plugin, ghost.getLocation(), () -> {
+            // On Folia remove() may only run on the ghost's own region thread. Through the entity
+            // scheduler rather than a location read up front: the ghost drifts around for its whole
+            // lifetime and is long since in a different region than where it spawned.
+            Scheduler.runOnEntity(this.plugin, ghost, () -> {
                 if (ghost.isValid() && !ghost.isDead()) {
                     ghost.remove();
                 }
@@ -236,8 +234,8 @@ public class HauntedNightManager {
         }
     }
 
-    // Nur die Differenz schicken statt jede Sekunde alle Zuschauer zu entfernen und neu
-    // hinzuzufügen — das waren pro Spieler zwei überflüssige Pakete pro Sekunde.
+    // Send only the difference instead of removing and re-adding every viewer each second —
+    // that was two pointless packets per player per second.
     private void showBarFor(List<Player> players, double progress) {
         Set<Player> wanted = new HashSet<Player>(players);
         Set<Player> current = new HashSet<Player>(this.bar.getPlayers());
@@ -279,8 +277,8 @@ public class HauntedNightManager {
             this.ghostCooldown.put(id, left);
             if (left > 0) continue;
             this.ghostCooldown.put(id, this.ghostSpawnEvery);
-            // Position einmal erfassen — der Spawn muss auf Folia in der Region der
-            // geplanten Location bleiben, auch wenn der Spieler weiterläuft.
+            // Capture the position once — on Folia the spawn has to stay in the region of the
+            // planned location, even if the player keeps walking.
             Location pLoc = p.getLocation();
             Scheduler.runAtLocation(this.plugin, pLoc, () -> {
                 if (!p.isOnline()) {
@@ -295,7 +293,7 @@ public class HauntedNightManager {
                     ghost.customName(((TextComponent)Component.text((String)ghostName).color((TextColor)NamedTextColor.WHITE)).decorate(TextDecoration.BOLD));
                     ghost.setCustomNameVisible(true);
                     ghost.setGlowing(true);
-                    ghost.getPersistentDataContainer().set(this.GHOST_MARKER, PersistentDataType.BYTE, (byte)1);
+                    ghost.getPersistentDataContainer().set(SpookySeason.get().ghostMarker(), PersistentDataType.BYTE, (byte)1);
                     if (ghost instanceof LivingEntity && (le = (LivingEntity)ghost).getAttribute(Attributes.ATTACK_DAMAGE) != null) {
                         le.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(0.0);
                     }

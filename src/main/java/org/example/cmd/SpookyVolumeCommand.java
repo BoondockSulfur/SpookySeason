@@ -57,6 +57,13 @@ TabCompleter {
                     p.sendMessage(Lang.get("command.volume.invalid-number", new String[0]));
                     return true;
                 }
+                // "NaN" is valid input for parseDouble and survives any clamping (Math.max/min
+                // pass NaN straight through) — without this check NaN ends up in player-prefs.yml
+                // and in playSound().
+                if (!Double.isFinite(v)) {
+                    p.sendMessage(Lang.get("command.volume.invalid-number", new String[0]));
+                    return true;
+                }
                 v = Math.max(0.0, Math.min(1.0, v));
                 switch (args[0].toLowerCase()) {
                     case "ambient": {
