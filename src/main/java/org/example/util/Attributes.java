@@ -5,21 +5,34 @@ import org.bukkit.Registry;
 import org.bukkit.attribute.Attribute;
 
 /**
- * Versionsübergreifende Attribute-Auflösung: Mit MC 1.21.2/3 wurden die Attribute-Keys
- * umbenannt (minecraft:generic.max_health → minecraft:max_health) und die Enum-Konstanten
- * entsprechend (GENERIC_MAX_HEALTH → MAX_HEALTH). Enum-Konstanten im Bytecode binden an
- * genau eine Version — der Registry-Lookup mit Fallback läuft auf 1.21.x UND 26.x.
+ * Attribute resolution across versions: MC 1.21.2/3 renamed the attribute keys
+ * (minecraft:generic.max_health became minecraft:max_health) and the enum constants along with
+ * them (GENERIC_MAX_HEALTH became MAX_HEALTH). Enum constants in bytecode bind to exactly one
+ * version — a registry lookup with a fallback runs on 1.21.x AND 26.x.
  */
 public final class Attributes {
     public static final Attribute MAX_HEALTH = resolve("max_health", "generic.max_health");
     public static final Attribute MOVEMENT_SPEED = resolve("movement_speed", "generic.movement_speed");
     public static final Attribute ATTACK_DAMAGE = resolve("attack_damage", "generic.attack_damage");
+    public static final Attribute FOLLOW_RANGE = resolve("follow_range", "generic.follow_range");
+    public static final Attribute KNOCKBACK_RESISTANCE = resolve("knockback_resistance", "generic.knockback_resistance");
+    /**
+     * Entity size multiplier. Only exists from MC 1.20.5 onwards, so this one is resolved
+     * leniently: on an older server it stays null and callers simply skip it, instead of
+     * taking the whole plugin down at enable time.
+     */
+    public static final Attribute SCALE = resolveOptional("scale", "generic.scale");
 
     private Attributes() {
     }
 
-    /** Erzwingt die Klasseninitialisierung, damit Auflösungsfehler sofort beim Enable auffallen. */
+    /** Forces class initialisation, so resolution failures surface at enable time. */
     public static void init() {
+    }
+
+    private static Attribute resolveOptional(String modernKey, String legacyKey) {
+        Attribute a = Registry.ATTRIBUTE.get(NamespacedKey.minecraft(modernKey));
+        return a != null ? a : Registry.ATTRIBUTE.get(NamespacedKey.minecraft(legacyKey));
     }
 
     private static Attribute resolve(String modernKey, String legacyKey) {
