@@ -346,6 +346,18 @@ Drei Fallen:
 Ein `/spooky reload` bricht einen laufenden Überfall **nicht** ab: Er arbeitet mit dem
 Konfigurations-Schnappschuss weiter, der beim Start gezogen wurde. `/spooky off` bricht ihn ab.
 
+### Erste Installation auf einem Server
+
+Beim ersten Start legt das Plugin `config.yml` und die Sprachdateien an und ist damit sofort
+scharf. Drei Punkte, die man **vorher** wissen sollte:
+
+- **`enabledWorlds` ist ab Werk leer, und leer heißt ALLE Welten** — auch die Bauwelt. Vor dem
+  ersten Start oder direkt danach die gewünschten Welten eintragen und `/spooky reload`.
+- **`activeWindow` steht auf 27.–31. Oktober.** Außerhalb dieses Fensters ruhen Trick-or-Treat,
+  Blutmond, Geister, Fledermäuse, Jumpscares und der Boss-Auto-Spawn von selbst.
+- **Der Überfall hängt nicht am Saisonfenster**, startet aber nur über `/spookyraid start` oder
+  über `raid.schedule`, und das ist ab Werk aus. Er läuft also nicht ungefragt los.
+
 ### Dateien im Plugin-Ordner
 
 | Datei | Inhalt |
@@ -441,6 +453,14 @@ Rein additiv, es wurde kein bestehendes Feature verändert oder entfernt.
   unberührt.
 
 Weiter im Verlauf der Live-Tests dazugekommen:
+
+- **Eigene Zonen als dritte Ziel-Art** (`mode: zone`), im Spiel abgesteckt über
+  `/spookyraid zone pos1|pos2|save` — ohne Fremdplugin. Der WorldGuard-Modus bleibt daneben
+  bestehen. Warnung beim Start, wenn der Spawn-Ring innerhalb der Zone liegt.
+- **Angreifer erreichen das Ziel zuverlässig:** Spawnpunkte landen nicht mehr in Höhlen oder
+  Baumkronen, Tiere lenken niemanden mehr ab, und wer keinen Abstand mehr abbaut, bekommt einen
+  Schub (`unstickSpeed`). Archetypen können einen eigenen Spawn-Ring mitbringen — für Wither der
+  einzige zuverlässige Weg, weil sie über ihre Flugsteuerung laufen und nicht über Wegfindung.
 
 - **Mehrere Ziele gleichzeitig** (`points`), Verlustbedingung `all` / `any` / Anzahl, je Ziel eine
   eigene schwebende Lebenspunkte-Anzeige.
