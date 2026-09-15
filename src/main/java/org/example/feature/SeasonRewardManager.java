@@ -30,7 +30,7 @@ implements Listener {
     private final YamlConfiguration stateCfg;
     private final YamlSaver pendingSaver;
     private final YamlSaver stateSaver;
-    // Wird über Neustarts hinweg in reward-state.yml gehalten, siehe checkTransition().
+    // Kept across restarts in reward-state.yml, see checkTransition().
     private volatile boolean wasActive;
 
     public SeasonRewardManager(Plugin plugin) {
@@ -41,16 +41,15 @@ implements Listener {
         File stateFile = new File(plugin.getDataFolder(), "reward-state.yml");
         this.stateCfg = YamlConfiguration.loadConfiguration(stateFile);
         this.stateSaver = new YamlSaver(plugin, stateFile, this::snapshotState);
-        // Beim allerersten Start (kein gespeicherter Zustand) den aktuellen Stand übernehmen,
-        // damit nicht sofort eine Verteilung ausgelöst wird.
+        // On the very first start (no saved state) adopt the current situation, so a distribution
+        // is not triggered immediately.
         this.wasActive = this.stateCfg.getBoolean("wasActive", SpookySeason.get().isInSeasonWindow());
     }
 
     public void start() {
         this.stop();
-        // wasActive wird hier bewusst NICHT auf den aktuellen Stand gesetzt: Lief der Server über
-        // das Season-Ende hinweg nicht, ist die Flanke sonst für immer verloren und die Rewards
-        // werden nie verteilt.
+        // wasActive is deliberately NOT refreshed here: if the server was down across the end of
+        // the season, the edge would otherwise be lost forever and the rewards never handed out.
         this.checkTask = Scheduler.runTimer(this.plugin, this::checkTransition, 1200L, 1200L);
     }
 
@@ -64,8 +63,8 @@ implements Listener {
     }
 
     private void checkTransition() {
-        // Bewusst das Kalenderfenster statt isSeasonActive(): ein manuelles /spooky off ist
-        // kein Season-Ende und darf keine Rewards verteilen.
+        // Deliberately the calendar window rather than isSeasonActive(): a manual /spooky off is
+        // not the end of the season and must not hand out rewards.
         boolean nowActive = SpookySeason.get().isInSeasonWindow();
         boolean seasonEnded = this.wasActive && !nowActive;
         boolean dirty = false;
@@ -142,8 +141,8 @@ implements Listener {
             List<String> resolved = commands.stream().map(cmd -> cmd.replace("{player}", playerName).replace("{rank}", String.valueOf(currentRank)).replace("{treats}", String.valueOf(entry.getValue()))).toList();
             Player online = Bukkit.getPlayer(uuid);
             if (online != null && online.isOnline()) {
-                // Die Reward-Commands fassen das Inventar des Spielers an — auf Folia geht das nur
-                // aus dessen Region-Thread, nicht aus dem Global-Tick, in dem diese Prüfung läuft.
+                // The reward commands touch the player's inventory — on Folia that only works
+                // from their region thread, not from the global tick this check runs on.
                 Scheduler.runOnEntity(this.plugin, online, () -> {
                     if (!online.isOnline()) {
                         this.queuePending(uuid, resolved);
@@ -158,7 +157,7 @@ implements Listener {
             this.plugin.getLogger().info("Rank #" + rank + ": " + playerName + " (" + String.valueOf(entry.getValue()) + " treats)");
             ++rank;
         }
-        // Ohne Reset würde jede weitere Verteilung dieselbe kumulierte Top-Liste erneut belohnen.
+        // Without the reset, every further distribution would reward the same cumulative top list again.
         SpookySeason.get().stats().resetAll();
         this.plugin.getLogger().info("Treat stats reset after reward distribution.");
     }
@@ -171,8 +170,8 @@ implements Listener {
         if (commands.isEmpty()) {
             return;
         }
-        // Zurücklegen, falls der Spieler die Wartezeit nicht übersteht — auf Folia auch dann,
-        // wenn Folia den Task wegen des Logouts gar nicht erst ausführt (retired).
+        // Put them back if the player does not survive the wait — on Folia also for the case
+        // where Folia never runs the task at all because of the logout (retired).
         Runnable requeue = () -> this.queuePending(uuid, commands);
         Scheduler.runEntityLater(this.plugin, player, () -> {
             if (player.isOnline()) {
@@ -184,7 +183,7 @@ implements Listener {
         }, requeue, 60L);
     }
 
-    /** Holt die offenen Commands und bucht sie sofort aus — sonst liest ein Relog sie erneut (Dupe). */
+    /** Takes the pending commands and clears them at once — otherwise a relog reads them again (dupe). */
     private List<String> takePending(UUID uuid) {
         String path = "pending." + String.valueOf(uuid);
         List<String> commands;

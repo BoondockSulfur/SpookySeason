@@ -47,7 +47,7 @@ public final class Items {
         if (langKey != null) {
             Items.rename(stack, Lang.get(langKey, new String[0]));
         }
-        // Bei vollem Inventar verfällt der Treat sonst kommentarlos.
+        // With a full inventory the treat would otherwise vanish without a word.
         Map<Integer, ItemStack> leftover = p.getInventory().addItem(stack);
         for (ItemStack rest : leftover.values()) {
             p.getWorld().dropItemNaturally(p.getLocation(), rest);

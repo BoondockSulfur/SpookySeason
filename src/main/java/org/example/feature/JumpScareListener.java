@@ -33,7 +33,7 @@ import org.example.SpookySeason;
 public class JumpScareListener
 implements Listener {
     private final SpookySeason plugin;
-    // Events kommen auf Folia von unterschiedlichen Region-Threads.
+    // On Folia, events arrive from different region threads.
     private final Map<UUID, Long> cooldown = new ConcurrentHashMap<UUID, Long>();
 
     public JumpScareListener(SpookySeason plugin) {

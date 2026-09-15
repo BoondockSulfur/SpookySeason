@@ -57,8 +57,8 @@ implements Listener {
     private static final int SLOT_RAIN = 16;
     private static final int SLOT_LEADER = 22;
 
-    // Eigener Holder statt Titel-Vergleich: kollisionssicher gegenüber fremden
-    // Inventaren mit gleichem Titel.
+    // A dedicated holder rather than comparing titles: collision-proof against foreign
+    // inventories that happen to share a title.
     private static final class MenuHolder implements InventoryHolder {
         private Inventory inventory;
 
@@ -143,16 +143,16 @@ implements Listener {
 
     @EventHandler
     public void onDrag(InventoryDragEvent e) {
-        // Ohne Drag-Schutz können Spieler Items in die GUI ziehen und verlieren
-        // sie beim Schließen, weil das Inventar verworfen wird.
+        // Without drag protection players can drag items into the GUI and lose them on close,
+        // because the inventory is discarded.
         if (!(e.getView().getTopInventory().getHolder() instanceof MenuHolder)) {
             return;
         }
         e.setCancelled(true);
     }
 
-    // Inventar nicht mitten im Click-Event neu öffnen — der Client bleibt sonst gern mit
-    // Geister-Items aus dem alten View zurück. Ein Tick später ist das Event durch.
+    // Do not reopen the inventory in the middle of the click event — the client tends to be left
+    // with ghost items from the old view. One tick later the event is done.
     private void reopen(Player p) {
         Scheduler.runEntityLater(SpookySeason.get(), p, () -> {
             if (p.isOnline()) {

@@ -44,11 +44,11 @@ public final class Scheduler {
     }
 
     /**
-     * Der DEKLARIERTE Rückgabetyp des Bukkit-Getters, also das öffentliche Scheduler-Interface.
+     * The DECLARED return type of the Bukkit getter, i.e. the public scheduler interface.
      *
-     * Wichtig: Folias Implementierungsklassen sind teils paketprivat. Ein Method-Objekt, das über
-     * {@code instanz.getClass()} gefunden wurde, lässt sich dann nicht aufrufen
-     * (IllegalAccessException) — die Methode muss am öffentlichen Interface gesucht werden.
+     * <p>Important: some of Folia's implementation classes are package-private. A Method object
+     * found through {@code instance.getClass()} then cannot be invoked (IllegalAccessException) —
+     * the method has to be looked up on the public interface.
      */
     private static Class<?> schedulerType(String getterName) {
         try {
@@ -106,8 +106,8 @@ public final class Scheduler {
             }
             catch (Exception e) {
                 if (!plugin.isEnabled()) {
-                    // Folia lehnt Tasks für deaktivierte Plugins ab (z.B. während onDisable).
-                    // Liegengebliebene markierte Entities räumt EntityCleanupListener beim nächsten Chunk-Load ab.
+                    // Folia refuses tasks for disabled plugins (during onDisable, for instance).
+                    // Marked entities left behind are cleared by EntityCleanupListener on the next chunk load.
                     return;
                 }
                 throw new RuntimeException("Folia region scheduler failed", e);
@@ -118,9 +118,9 @@ public final class Scheduler {
     }
 
     /**
-     * Führt die Aufgabe im Region-Thread der Entity aus — egal, wo die Entity gerade ist.
-     * Anders als {@link #runAtLocation} braucht das keinen vorab bekannten Ort und bleibt
-     * korrekt, wenn sich die Entity seit dem Aufruf in eine andere Region bewegt hat.
+     * Runs the task on the entity's region thread, wherever that entity currently is. Unlike
+     * {@link #runAtLocation} this needs no location known up front and stays correct if the entity
+     * has moved into a different region since the call.
      */
     public static void runOnEntity(Plugin plugin, Entity entity, Runnable task) {
         if (FOLIA) {
@@ -135,7 +135,7 @@ public final class Scheduler {
             }
             catch (Exception e) {
                 if (!plugin.isEnabled()) {
-                    // Folia lehnt Tasks für deaktivierte Plugins ab (z.B. während onDisable).
+                    // Folia refuses tasks for disabled plugins (during onDisable, for instance).
                     return;
                 }
                 throw new RuntimeException("Folia entity scheduler failed", e);
@@ -150,9 +150,9 @@ public final class Scheduler {
     }
 
     /**
-     * Wie {@link #runEntityLater(Plugin, Entity, Runnable, long)}, aber mit Callback für den Fall,
-     * dass die Entity vor Ablauf der Verzögerung verschwindet (auf Folia z.B. ein Logout).
-     * Wer in der Aufgabe etwas Verbindliches tut, darf sie sonst still verlieren.
+     * Like {@link #runEntityLater(Plugin, Entity, Runnable, long)}, but with a callback for the
+     * case where the entity disappears before the delay elapses (a logout on Folia, say). Anything
+     * doing binding work in that task would otherwise lose it silently.
      */
     public static void runEntityLater(Plugin plugin, Entity entity, Runnable task, Runnable onRetired, long delayTicks) {
         if (FOLIA) {
@@ -181,10 +181,10 @@ public final class Scheduler {
     }
 
     /**
-     * Wie {@link #runEntityTimer(Plugin, Entity, Runnable, long, long)}, aber mit Callback für den
-     * Fall, dass Folia den Task fallen lässt, weil die Entity verschwunden ist (Tod, Chunk-Entladung).
-     * Ohne diesen Callback bleibt der Aufrufer auf einem Zustand sitzen, den nie jemand aufräumt —
-     * auf Paper übernimmt das der weiterlaufende Timer selbst, auf Folia niemand.
+     * Like {@link #runEntityTimer(Plugin, Entity, Runnable, long, long)}, but with a callback for
+     * the case where Folia drops the task because the entity is gone (death, chunk unload).
+     * Without it the caller is left sitting on state nobody ever cleans up — on Paper the timer
+     * keeps running and handles that itself, on Folia nobody does.
      */
     public static TaskHandle runEntityTimer(Plugin plugin, Entity entity, Runnable task, Runnable onRetired, long delayTicks, long periodTicks) {
         if (FOLIA) {
@@ -197,8 +197,8 @@ public final class Scheduler {
                 Method method = Scheduler.cachedMethod(schedulerType, "runAtFixedRate", 5);
                 Object handle = method.invoke(entityScheduler, plugin, consumer, retired, Math.max(1L, delayTicks), Math.max(1L, periodTicks));
                 if (handle == null) {
-                    // Entity war schon weg, bevor der Task überhaupt lief — Folia ruft dann
-                    // auch das retired-Callback nicht mehr auf.
+                    // The entity was already gone before the task ever ran — Folia then does not
+                    // invoke the retired callback either.
                     onRetired.run();
                     return () -> {};
                 }
@@ -233,9 +233,9 @@ public final class Scheduler {
             Scheduler.cachedMethod(taskType, "cancel", 0).invoke(handle);
         }
         catch (Exception e) {
-            // Bewusst NICHT verschlucken: Genau eine leere catch-Klausel an dieser Stelle hat
-            // verdeckt, dass auf Folia überhaupt nichts abgebrochen wurde — bei jedem
-            // /spooky reload lief ein weiterer Timer-Satz zusätzlich weiter.
+            // Deliberately NOT swallowed: one empty catch clause right here hid the fact that
+            // nothing was being cancelled at all on Folia — every /spooky reload left another full
+            // set of timers running alongside the previous ones.
             Bukkit.getLogger().warning("[SpookySeason] Could not cancel scheduled task: " + e);
         }
     }

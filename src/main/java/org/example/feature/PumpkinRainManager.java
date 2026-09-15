@@ -80,9 +80,9 @@ public class PumpkinRainManager {
                         if (!SpookySeason.get().isWorldEnabled(w)) continue;
                         for (Player p : w.getPlayers()) {
                             if (SpookySeason.get().prefs().isOptedOut(p.getUniqueId())) continue;
-                            // Position einmal erfassen und im Lambda weiterverwenden — auf Folia muss
-                            // der Spawn in der Region der geplanten Location bleiben, auch wenn der
-                            // Spieler sich inzwischen bewegt hat.
+                            // Capture the position once and reuse it inside the lambda — on Folia
+                            // the spawn has to stay in the region of the planned location, even if
+                            // the player has moved on since.
                             Location anchor = p.getLocation();
                             Scheduler.runAtLocation(PumpkinRainManager.this.plugin, anchor, () -> {
                                 if (!p.isOnline()) {

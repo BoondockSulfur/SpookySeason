@@ -10,14 +10,14 @@ import java.util.logging.Level;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Entprelltes, asynchrones Schreiben einer YAML-Datei.
+ * Debounced, asynchronous writing of a YAML file.
  *
- * Auf Folia laufen Events und Timer auf beliebigen Region-Threads — Datei-I/O darf dort nicht
- * inline passieren. Es ist immer höchstens ein Async-Save geplant; ist das Plugin bereits
- * deaktiviert (onDisable), wird synchron geschrieben, weil dann nichts mehr geplant werden kann.
+ * <p>On Folia, events and timers run on arbitrary region threads, where file I/O must not happen
+ * inline. At most one async save is ever scheduled; if the plugin is already disabled (onDisable)
+ * the write happens synchronously, because nothing can be scheduled by then.
  *
- * Der Snapshot-Supplier muss den serialisierten Inhalt konsistent liefern (also selbst
- * synchronisieren) — geschrieben wird ausschließlich dieser Snapshot.
+ * <p>The snapshot supplier has to return the serialised content consistently, synchronising for
+ * itself — that snapshot is the only thing ever written.
  */
 public final class YamlSaver {
     private final Plugin plugin;
@@ -46,8 +46,8 @@ public final class YamlSaver {
     }
 
     /**
-     * Schreibt nur, wenn eine Änderung ansteht — für das Herunterfahren, damit ein noch nicht
-     * ausgeführter Async-Save nicht verloren geht, ohne unbenutzte Dateien anzulegen.
+     * Writes only if a change is pending — for shutdown, so an async save that has not run yet is
+     * not lost, without creating unused files along the way.
      */
     public void flushIfPending() {
         if (this.savePending.compareAndSet(true, false)) {
