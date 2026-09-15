@@ -317,6 +317,11 @@ raid:
     # withers otherwise fills the screen with bars and pushes the raid's own two out of view.
     # The wave leader keeps its bar - that one is drawn by the plugin, not by the entity.
     hideBossBars: true
+    # Nudge along any attacker whose distance to the target has stopped shrinking. A path alone
+    # does not move everything: a wither flies by its own control and simply hovers, and ground
+    # mobs get caught on terrain. 0 turns it off, unstickMinDistance is what counts as arrived.
+    unstickSpeed: 0.35
+    unstickMinDistance: 5.0
 
     # ── The attacker roster ────────────────────────────────────────────────
     # Each entry is one archetype. Several entries may share an entity type, which is how a

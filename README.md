@@ -193,7 +193,9 @@ zwangsläufig falsch.
 - `target` (Standard) — das Ziel hat Vorrang. Ein Verteidiger wird nur bekämpft, solange er
   innerhalb von `playerAggroRange` steht; danach bricht der Angreifer ab und läuft weiter. Ohne
   das rennt eine ganze Welle einem einzelnen Spieler quer über die Karte hinterher und das Ziel
-  bleibt unberührt.
+  bleibt unberührt. **Alles andere, was ein Angreifer von sich aus anvisiert, wird verworfen** —
+  Wither greifen sonst jedes Nicht-Untote an, und ein einziges Huhn parkt einen von ihnen für den
+  Rest der Welle 25 Blöcke neben dem Ziel.
 - `players` — reines Vanilla-Verhalten, Spieler zuerst, egal wie weit.
 
 Angegriffen wird in beiden Fällen **beides**: Spieler über die Mob-KI, das Ziel über die Nähe.
@@ -297,10 +299,15 @@ Drei Fallen:
   der Treffer selbst **und** die Folgewirkung (Wither-, Gift-, Magieschaden), denn die kommt
   später ohne Verursacher an. Gemessen über 75 Sekunden mit vier Withern in der Welle: 1 Verlust
   mit dem Schutz, 7 ohne.
+- **Angreifer, die nicht vorankommen, bekommen einen Schub** (`unstickSpeed`). Eine Wegvorgabe
+  bewegt nicht alles: Ein Wither fliegt über seine eigene Flugsteuerung und schwebt sonst einfach,
+  Bodenmobs verhaken sich im Gelände. Gemessen wird schlicht, ob der Abstand zum Ziel kleiner wird.
 - **Spawnpunkte liegen auf dem Boden, nicht in Baumkronen.** `getHighestBlockYAt` liefert über
   einem Wald die Blattkrone; gesucht wird deshalb von dort abwärts der erste feste Block, der
   weder Laub noch Stamm ist und zwei Blöcke Luft über sich hat. Das schließt auch Spawns im
-  Wasser und unter Überhängen aus. Findet sich in einer Spalte nichts, gilt der Versuch als
+  Wasser und unter Überhängen aus. Gesucht wird dabei nur wenige Blöcke unter der Oberfläche —
+  wer bis ganz nach unten sucht, landet in der ersten Höhle, und ein Angreifer darin steckt den
+  ganzen Überfall dort fest. Findet sich in einer Spalte nichts, gilt der Versuch als
   fehlgeschlagen und es wird woanders gewürfelt.
 - **Wither und Drachen bringen ihre eigene Vanilla-Bossleiste mit.** `raid.waves.hideBossBars`
   (Standard an) blendet sie aus — bei drei Withern in einer Welle füllen sie sonst den Bildschirm

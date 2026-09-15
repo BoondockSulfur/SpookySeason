@@ -26,6 +26,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.Tag;
+import org.bukkit.block.Block;
 import org.bukkit.World;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -57,11 +58,13 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.util.Vector;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
 import org.example.util.Attributes;
@@ -95,6 +98,8 @@ public class RaidManager implements Listener {
 
     private static final int TARGET_READY_GRACE_SECONDS = 15;
     private static final int LEADER_GRACE_SECONDS = 15;
+    /** How far below the surface a spawn point may be looked for, in blocks. */
+    private static final int SURFACE_SEARCH_DEPTH = 6;
 
     private final Plugin plugin;
     private Scheduler.TaskHandle tickTask;
@@ -118,6 +123,7 @@ public class RaidManager implements Listener {
     private final java.util.Map<String, Integer> spawnedThisWave = new ConcurrentHashMap<String, Integer>();
     private final NamespacedKey targetDamageKey;
     private final NamespacedKey rangedKey;
+    private final NamespacedKey lastDistanceKey;
 
     private final BossBar waveBar;
     private final BossBar targetBar;
@@ -145,6 +151,7 @@ public class RaidManager implements Listener {
         this.plugin = plugin;
         this.targetDamageKey = new NamespacedKey(plugin, "spooky_raid_target_damage");
         this.rangedKey = new NamespacedKey(plugin, "spooky_raid_ranged");
+        this.lastDistanceKey = new NamespacedKey(plugin, "spooky_raid_last_distance");
         this.waveBar = Bukkit.createBossBar(Lang.get("raid.bar.wave", "wave", "1", "total", "1", "alive", "0"),
                 BarColor.RED, BarStyle.SEGMENTED_10, new BarFlag[0]);
         this.waveBar.setVisible(false);
@@ -648,17 +655,29 @@ public class RaidManager implements Listener {
         World world = candidate.getWorld();
         int x = candidate.getBlockX();
         int z = candidate.getBlockZ();
-        int top = world.getHighestBlockYAt(x, z);
-        int floor = world.getMinHeight() + 1;
-        for (int y = Math.min(top, world.getMaxHeight() - 3); y >= floor; --y) {
+        int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 3);
+        // Only ever look just below the surface. Searching all the way down finds the first cave
+        // instead, and an attacker spawned in one is stuck there for the whole raid - measured
+        // with withers hovering 56 and 72 blocks under the target.
+        int lowest = Math.max(world.getMinHeight() + 1, top - SURFACE_SEARCH_DEPTH);
+        for (int y = top; y >= lowest; --y) {
             Material standing = world.getBlockAt(x, y, z).getType();
             if (!standing.isSolid()) continue;
             if (Tag.LEAVES.isTagged(standing) || Tag.LOGS.isTagged(standing)) continue;
-            if (world.getBlockAt(x, y + 1, z).getType() != Material.AIR) continue;
-            if (world.getBlockAt(x, y + 2, z).getType() != Material.AIR) continue;
+            if (!RaidManager.isClear(world.getBlockAt(x, y + 1, z))) continue;
+            if (!RaidManager.isClear(world.getBlockAt(x, y + 2, z))) continue;
             return new Location(world, x + 0.5, y + 1, z + 0.5);
         }
         return null;
+    }
+
+    /**
+     * Room to stand in. Passable rather than strictly air: grass, flowers and snow layers sit on
+     * top of perfectly good ground, and demanding air there rejected the surface and sent the
+     * search down into the caves. Liquids are still refused - nobody should spawn in water.
+     */
+    private static boolean isClear(Block block) {
+        return !block.isLiquid() && block.isPassable();
     }
 
     private void configureAttacker(RaidSettings cfg, RaidMob archetype, LivingEntity le, int wave) {
@@ -779,30 +798,38 @@ public class RaidManager implements Listener {
                 boolean attackerRanged = a.getPersistentDataContainer()
                         .getOrDefault(this.rangedKey, PersistentDataType.BYTE, (byte)0) == (byte)1;
                 current.inspectAttacker(a, attackerDamage, attackerRanged, cfg.rangedReach);
-                if (!retargetNow || !(a instanceof Mob) || !a.isValid() || a.isDead()) {
+                if (!(a instanceof Mob) || !a.isValid() || a.isDead()) {
                     return;
                 }
                 Mob mob = (Mob)a;
                 Location from = a.getLocation();
+                // Every second, not on the retarget interval: a single impulse every few seconds
+                // is damped away long before the next one, which is exactly what left withers
+                // drifting 70 blocks off the target.
+                this.unstick(cfg, mob, from, current.navTarget(from));
+                if (!retargetNow) {
+                    return;
+                }
                 LivingEntity currentTarget = mob.getTarget();
-                if (!cfg.friendlyFire && currentTarget != null
+                if (currentTarget != null && (!currentTarget.isValid() || currentTarget.isDead())) {
+                    currentTarget = null;
+                }
+                if (currentTarget != null && !cfg.friendlyFire
                         && this.attackerIds.contains(currentTarget.getUniqueId())) {
                     // Locked on to one of its own. Cancelling the damage alone is not enough —
                     // the mob would stand there swinging at an ally instead of advancing.
                     mob.setTarget(null);
                     currentTarget = null;
                 }
-                if (currentTarget instanceof Player && currentTarget.isValid() && !currentTarget.isDead()) {
-                    boolean nearby = currentTarget.getWorld().equals(from.getWorld())
-                            && currentTarget.getLocation().distanceSquared(from) <= aggroSquared;
-                    if (!cfg.focusTarget || nearby) {
-                        // Whoever plants themselves directly in the way gets fought first.
-                        return;
-                    }
-                    // Too far away: the raid is about the target, not a chase across the map.
-                    // Without dropping the target an entire wave trails a single player around
-                    // while the target goes untouched.
+                if (currentTarget != null && !this.keepsTarget(cfg, currentTarget, from, aggroSquared)) {
+                    // Anything else it picked up on its own is a distraction. Withers are the
+                    // obvious case: they attack every non-undead mob, so one stray chicken parks
+                    // a wither twenty-five blocks off the target for the rest of the wave.
                     mob.setTarget(null);
+                    currentTarget = null;
+                }
+                if (currentTarget != null) {
+                    return;
                 }
                 LivingEntity attackTarget = current.attackTarget(from);
                 Location nav = current.navTarget(from);
@@ -831,6 +858,56 @@ public class RaidManager implements Listener {
                 }
             });
         }
+    }
+
+    /**
+     * Whether an attacker may keep the target its own AI picked.
+     *
+     * <p>With {@code focus: players} vanilla decides, as before. With {@code focus: target} only a
+     * defender who is actually in the way counts — every other creature the mob wandered into is
+     * dropped, so it carries on towards the objective.
+     */
+    private boolean keepsTarget(RaidSettings cfg, LivingEntity target, Location from, double aggroSquared) {
+        if (!cfg.focusTarget) {
+            return true;
+        }
+        if (!(target instanceof Player)) {
+            return false;
+        }
+        return target.getWorld().equals(from.getWorld())
+                && target.getLocation().distanceSquared(from) <= aggroSquared;
+    }
+
+    /**
+     * Pushes along an attacker that is not getting anywhere.
+     *
+     * <p>A path is not enough for everything. A wither moves by its own flight control, so
+     * {@code Pathfinder.moveTo} leaves it hovering: measured with two of them parked 34 and 29
+     * blocks off the target, unmoved for 45 seconds, while a path was supposedly set. Rather than
+     * special-casing mob types this watches whether the distance is actually shrinking and nudges
+     * whatever is not making progress; ground mobs caught on terrain benefit from the same.
+     *
+     * <p>The previous distance rides along on the entity, since this runs on its region thread.
+     */
+    private void unstick(RaidSettings cfg, Mob mob, Location from, Location nav) {
+        if (cfg.unstickSpeed <= 0.0 || nav == null || !nav.getWorld().equals(from.getWorld())) {
+            return;
+        }
+        double distance = from.distance(nav);
+        PersistentDataContainer pdc = mob.getPersistentDataContainer();
+        double previous = pdc.getOrDefault(this.lastDistanceKey, PersistentDataType.DOUBLE, -1.0);
+        pdc.set(this.lastDistanceKey, PersistentDataType.DOUBLE, distance);
+        if (distance <= cfg.unstickMinDistance || previous < 0.0) {
+            return;
+        }
+        if (distance < previous - 0.5) {
+            return;
+        }
+        Vector push = nav.toVector().subtract(from.toVector());
+        if (push.lengthSquared() < 1.0E-4) {
+            return;
+        }
+        mob.setVelocity(push.normalize().multiply(cfg.unstickSpeed));
     }
 
     private void clearAttackers() {

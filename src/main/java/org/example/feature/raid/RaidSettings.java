@@ -42,6 +42,8 @@ public final class RaidSettings {
     public final double rangedReach;
     public final boolean friendlyFire;
     public final boolean hideBossBars;
+    public final double unstickSpeed;
+    public final double unstickMinDistance;
     public final boolean debug;
 
     public final double baseHealth;
@@ -105,6 +107,8 @@ public final class RaidSettings {
         this.rangedReach = Math.max(4.0, cfg.getDouble("raid.waves.rangedReach", 16.0));
         this.friendlyFire = cfg.getBoolean("raid.waves.friendlyFire", false);
         this.hideBossBars = cfg.getBoolean("raid.waves.hideBossBars", true);
+        this.unstickSpeed = Math.max(0.0, cfg.getDouble("raid.waves.unstickSpeed", 0.35));
+        this.unstickMinDistance = Math.max(1.0, cfg.getDouble("raid.waves.unstickMinDistance", 5.0));
         this.debug = cfg.getBoolean("raid.debug", false);
 
         this.baseHealth = Math.max(1.0, cfg.getDouble("raid.waves.health", 20.0));
