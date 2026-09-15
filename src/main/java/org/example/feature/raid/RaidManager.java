@@ -531,7 +531,7 @@ public class RaidManager implements Listener {
             // one counts as the leader instead of clearing it away and placing a new one.
             this.leaderSeen = true;
         } else {
-            SpookySeason.get().boss().forceSpawnAt(this.ringLocation(center, cfg));
+            SpookySeason.get().boss().forceSpawnAt(this.ringLocation(center, cfg.spawnRadiusMin, cfg.spawnRadiusMax));
         }
         this.broadcast("raid.leader", new String[0]);
         this.showTitle("raid.title.leader", "raid.subtitle.leader", Sound.ENTITY_WITHER_SPAWN, 0.8f);
@@ -552,9 +552,11 @@ public class RaidManager implements Listener {
 
     // ── Angreifer ───────────────────────────────────────────────────────────
 
-    private Location ringLocation(Location center, RaidSettings cfg) {
+    private Location ringLocation(Location center, double min, double max) {
         double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0);
-        double radius = ThreadLocalRandom.current().nextDouble(cfg.spawnRadiusMin, cfg.spawnRadiusMax);
+        double low = Math.max(0.0, Math.min(min, max));
+        double high = Math.max(low + 0.5, max);
+        double radius = ThreadLocalRandom.current().nextDouble(low, high);
         return center.clone().add(Math.cos(angle) * radius, 0.0, Math.sin(angle) * radius);
     }
 
@@ -580,19 +582,31 @@ public class RaidManager implements Listener {
             if (anchor == null) {
                 return;
             }
-            this.dispatchSpawn(cfg, anchor);
+            // The archetype is drawn before the location, because it may bring its own spawn
+            // distance. Counted straight away so maxPerWave holds; a failed spawn gives it back.
+            RaidMob archetype = cfg.pick(this.waveIndex, this.spawnedThisWave);
+            if (archetype == null) {
+                this.remainingSpawns.set(0);
+                return;
+            }
+            this.spawnedThisWave.merge(archetype.id(), 1, Integer::sum);
+            this.dispatchSpawn(cfg, archetype, anchor);
         }
     }
 
-    private void dispatchSpawn(RaidSettings cfg, Location center) {
-        Location candidate = this.ringLocation(center, cfg);
+    private void dispatchSpawn(RaidSettings cfg, RaidMob archetype, Location center) {
+        Location candidate = this.ringLocation(center,
+                archetype.spawnRadiusMinOr(cfg.spawnRadiusMin),
+                archetype.spawnRadiusMaxOr(cfg.spawnRadiusMax));
         this.spawnsInFlight.incrementAndGet();
         this.spawnAttempts.incrementAndGet();
         int wave = this.waveIndex;
         try {
             Scheduler.runAtLocation(this.plugin, candidate, () -> {
                 try {
-                    this.spawnAttacker(cfg, candidate, wave);
+                    if (!this.spawnAttacker(cfg, archetype, candidate, wave)) {
+                        this.spawnedThisWave.merge(archetype.id(), -1, Integer::sum);
+                    }
                 }
                 catch (Exception e) {
                     if (this.spawnFailureLogged.compareAndSet(false, true)) {
@@ -613,32 +627,27 @@ public class RaidManager implements Listener {
         }
     }
 
-    private void spawnAttacker(RaidSettings cfg, Location candidate, int wave) {
+    /** @return true when an attacker actually made it into the world */
+    private boolean spawnAttacker(RaidSettings cfg, RaidMob archetype, Location candidate, int wave) {
         Location loc = RaidManager.groundAt(candidate);
         if (loc == null) {
             // No footing here — treated like any other failed attempt and retried elsewhere.
-            return;
+            return false;
         }
         if (cfg.respectRegionProtection && !SpookySeason.get().regions().canSpawnAt(loc)) {
-            return;
-        }
-        RaidMob archetype = cfg.pick(wave, this.spawnedThisWave);
-        if (archetype == null) {
-            // Everything allowed in this wave has used up its quota.
-            this.remainingSpawns.set(0);
-            return;
+            return false;
         }
         Entity spawned = loc.getWorld().spawnEntity(loc, archetype.type());
         if (!(spawned instanceof LivingEntity)) {
             spawned.remove();
-            return;
+            return false;
         }
         this.configureAttacker(cfg, archetype, (LivingEntity)spawned, wave);
-        this.spawnedThisWave.merge(archetype.id(), 1, Integer::sum);
         this.attackers.add(spawned);
         this.attackerIds.add(spawned.getUniqueId());
         this.remainingSpawns.decrementAndGet();
         loc.getWorld().spawnParticle(Particle.SOUL, loc.clone().add(0.0, 1.0, 0.0), 12, 0.4, 0.6, 0.4, 0.02);
+        return true;
     }
 
     /**

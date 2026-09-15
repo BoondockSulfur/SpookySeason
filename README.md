@@ -216,6 +216,7 @@ gepanzerter Angreifer:
 | `name` | überschreibt `waves.names` für diesen Archetyp |
 | `minPerWave` | mindestens so viele pro Welle, werden vor der Zufallsziehung gesetzt (`0` = reiner Zufall) |
 | `ranged` | schießt statt heranzulaufen; ohne Angabe automatisch bei Bogen/Armbrust |
+| `spawnRadiusMin` / `spawnRadiusMax` | eigener Spawn-Ring für diesen Archetyp statt des wellenweiten |
 | `equipment` | `weapon`, `offhand`, `helmet`, `chestplate`, `leggings`, `boots` |
 
 **Ausrüstung wird auch benutzt** — ein Zombie mit `IRON_SWORD` schlägt damit zu, und ein Schütze
@@ -223,6 +224,11 @@ beschießt das Ziel aus bis zu `raid.waves.rangedReach` Blöcken Entfernung, sta
 Das braucht Plugin-Hilfe: Das Ziel hat keine Trefferbox, ein echter Pfeil könnte es nie treffen —
 der Schuss ist Optik, den Schaden bucht das Plugin. Drop-Chancen stehen immer auf null. Achtung:
 Ein Archetyp mit eigenem Helm bekommt keinen Kürbis mehr und verbrennt dann bei Tag.
+
+**Wither reisen schlecht.** Sie bewegen sich über ihre eigene Flugsteuerung, nicht über
+Wegfindung — auf offener Strecke bleiben sie zuverlässig irgendwo hängen. Statt das zu bekämpfen,
+lässt man sie mit `spawnRadiusMin: 0` und `spawnRadiusMax: 5` **direkt am Ziel** erscheinen; die
+Anreise entfällt damit ganz. Gemessen: Abstand durchgehend unter 5 Blöcken statt 25 bis 70.
 
 **Enderdrachen taugen nicht als Angreifer.** Sie lassen sich zwar als Archetyp eintragen und
 spawnen auch (Größe und Lebenspunkte greifen), bewegen sich dann aber nicht: `EnderDragon` ist

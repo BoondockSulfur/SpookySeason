@@ -34,13 +34,15 @@ public final class RaidMob {
     private final double targetDamage;
     private final double speed;
     private final double scale;
+    private final double spawnRadiusMin;
+    private final double spawnRadiusMax;
     private final String name;
     private final Boolean ranged;
     private final Map<String, Material> equipment = new LinkedHashMap<String, Material>();
 
     private RaidMob(String id, EntityType type, int weight, int fromWave, int untilWave, int maxPerWave, int minPerWave,
                     double health, double damage, double targetDamage, double speed, double scale, String name,
-                    Boolean ranged) {
+                    Boolean ranged, double spawnRadiusMin, double spawnRadiusMax) {
         this.id = id;
         this.type = type;
         this.weight = weight;
@@ -55,6 +57,8 @@ public final class RaidMob {
         this.scale = scale;
         this.name = name;
         this.ranged = ranged;
+        this.spawnRadiusMin = spawnRadiusMin;
+        this.spawnRadiusMax = spawnRadiusMax;
     }
 
     /**
@@ -87,7 +91,9 @@ public final class RaidMob {
                 section.getDouble("speed", UNSET),
                 section.getDouble("scale", UNSET),
                 section.getString("name", null),
-                section.contains("ranged") ? Boolean.valueOf(section.getBoolean("ranged")) : null);
+                section.contains("ranged") ? Boolean.valueOf(section.getBoolean("ranged")) : null,
+                section.getDouble("spawnRadiusMin", UNSET),
+                section.getDouble("spawnRadiusMax", UNSET));
         ConfigurationSection gear = section.getConfigurationSection("equipment");
         if (gear != null) {
             for (String slot : gear.getKeys(false)) {
@@ -101,7 +107,7 @@ public final class RaidMob {
 
     /** Minimal archetype for the legacy {@code composition} format ({@code TYPE:weight}). */
     public static RaidMob legacy(EntityType type, int weight) {
-        return new RaidMob(type.name(), type, weight, 1, 0, 0, 0, UNSET, UNSET, UNSET, UNSET, UNSET, null, null);
+        return new RaidMob(type.name(), type, weight, 1, 0, 0, 0, UNSET, UNSET, UNSET, UNSET, UNSET, null, null, UNSET, UNSET);
     }
 
     public String id() {
@@ -181,6 +187,21 @@ public final class RaidMob {
             weapon = this.equipment.get("mainhand");
         }
         return weapon == Material.BOW || weapon == Material.CROSSBOW;
+    }
+
+    /**
+     * Distance band this archetype appears in, or the wave-wide value when it sets none.
+     *
+     * <p>Worth overriding for anything that travels badly. A wither moves by its own flight
+     * control and is unreliable at crossing thirty blocks of terrain; dropping it in at the
+     * objective sidesteps the journey entirely.
+     */
+    public double spawnRadiusMinOr(double fallback) {
+        return this.spawnRadiusMin < 0.0 ? fallback : this.spawnRadiusMin;
+    }
+
+    public double spawnRadiusMaxOr(double fallback) {
+        return this.spawnRadiusMax < 0.0 ? fallback : this.spawnRadiusMax;
     }
 
     public boolean hasEquipment() {

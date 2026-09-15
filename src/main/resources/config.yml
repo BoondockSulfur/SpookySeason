@@ -339,6 +339,10 @@ raid:
     #   health / damage / targetDamage / speed   override the wave-wide values; omit to inherit
     #   scale       size multiplier (needs MC 1.20.5+), 1.0 is normal
     #   name        overrides waves.names for this archetype
+    #   spawnRadiusMin / spawnRadiusMax   override the wave-wide spawn ring for this archetype.
+    #               Worth it for anything that travels badly: a wither moves by its own flight
+    #               control and is unreliable at crossing open ground, so set 0/4 and it simply
+    #               arrives at the objective instead of trying to fly there.
     #   equipment   weapon, offhand, helmet, chestplate, leggings, boots.
     #               Mobs actually use what they carry - give a skeleton a bow and it shoots.
     #               Drop chances are always zero.
