@@ -56,9 +56,12 @@ trickOrTreat:
     - ZOMBIE
   meanMobBuffSeconds: 20
 
-# Also allow Trick-or-Treat on right-clicking villagers
+# Also allow Trick-or-Treat on right-clicking villagers.
+# Note: a knock consumes the click, so the trading screen does not open that one time.
+# With sneakToTrade, a sneaking right-click always opens the trade instead.
 trickOrTreatVillagers:
   enabled: true
+  sneakToTrade: true
 
 # ── Haunted Night ──────────────────────────────────────────
 hauntedNight:
@@ -96,6 +99,10 @@ halloweenMobs:
 # Horse and rider share one HP pool. Damage to horse transfers to rider.
 halloweenBoss:
   enabled: true
+  # Health is tracked by the plugin, so this is NOT capped at 1024 like the vanilla max_health
+  # attribute. The entity holds one chunk of it and is topped back up as the pool drains; the
+  # boss bar always shows the pool, not the entity. Rough guide for a wave leader facing a
+  # server full of defenders: 900-3000.
   spawnChance: 0.005
   # Minimum delay before the boss can spawn again after being defeated.
   respawnCooldownSeconds: 300
@@ -158,3 +165,271 @@ seasonEndRewards:
     3:
       - "give {player} diamond 1"
       - "give {player} golden_apple 1"
+
+# ── Undead Raid ────────────────────────────────────────────
+# Waves of undead march on a defended target. Defenders hold the line; if the
+# target falls, the raid is lost. Independent of the season window above:
+# it only ever starts from /spookyraid start or from raid.schedule below.
+raid:
+  enabled: true
+
+  # Per-attacker diagnostics in the server log (position, distance to target, what it is
+  # actually targeting, whether it has a path). Very noisy - only for tracking down
+  # "the attackers never arrive" style problems.
+  debug: false
+
+  # Optional automatic start. Independent of activeWindow.
+  # startDay/endDay = 0 means "never automatically".
+  # The raid starts on the first tick inside windowMinutes after startTime
+  # (server-local time) and at most once per day. Without players online the
+  # day stays open, so it still fires once someone joins inside the window.
+  schedule:
+    enabled: false
+    month: 10
+    startDay: 0
+    endDay: 0
+    startTime: "20:00"
+    windowMinutes: 15
+
+  # What is being defended.
+  #   objective = a marked entity with its own health pool at a fixed spot.
+  #               It has no AI and only takes damage from the raid's attackers.
+  #   region    = a named WorldGuard region. Every attacker that gets inside
+  #               counts as a breach; breachLimit breaches lose the raid.
+  #               Needs WorldGuard.
+  target:
+    mode: objective
+    objective:
+      # Single target. Only used while "points" below is empty.
+      world: world
+      x: 0.5
+      y: 64.0
+      z: 0.5
+      # Several targets at once. One line per target:
+      #   "world,x,y,z"  or  "world,x,y,z,health"
+      # Easiest via /spookyraid target add (adds your own position).
+      # All targets must be in the same world.
+      points: []
+      # When is the raid lost?
+      #   all        = only when every target has fallen (default)
+      #   any        = as soon as the first one falls
+      #   <a number> = when that many targets have fallen
+      lose: all
+      # Health per target. The plugin tracks this itself, so the value is free -
+      # it is NOT capped at 1024 like the vanilla max_health attribute.
+      health: 1024
+      # display = a block object without any hitbox (recommended). It never swallows a
+      #           sword swing, so small attackers standing in front of it stay hittable.
+      # entity  = a mob as the target. Looks more alive, but its hitbox catches player
+      #           hits aimed at attackers next to it.
+      style: display
+      block: SOUL_LANTERN
+      entity: IRON_GOLEM
+      glowing: true
+      silent: true
+      # Floating health readout above each target.
+      showLabel: true
+      labelHeight: 1.6
+      # From this distance an attacker hits the target (once per second).
+      reach: 4.0
+    region:
+      world: world
+      name: ''
+      breachLimit: 20
+
+  # Rough starting points, adjust to your player count:
+  #   handful of defenders  -> count 5, baseMobs 8,  mobsPerWave 4,  maxAlive 40,  damage 3
+  #   large event (20+)     -> count 8, baseMobs 30, mobsPerWave 15, maxAlive 150, damage 4
+  # With many defenders raise maxAlive first - it is the real limit on how much pressure
+  # arrives at once. Raise the target health to match (it has no cap).
+  waves:
+    count: 5
+    breakSeconds: 20
+    # Attackers per wave: baseMobs + (wave - 1) * mobsPerWave
+    baseMobs: 8
+    mobsPerWave: 4
+    # Hard cap on attackers alive at the same time, and how many are spawned per second.
+    maxAlive: 40
+    spawnPerSecond: 4
+    spawnRadiusMin: 22
+    spawnRadiusMax: 40
+    # Safety net: a wave that cannot finish (stuck attackers) ends after this many
+    # seconds. 0 disables it.
+    timeoutSeconds: 420
+    retargetSeconds: 3
+    # Honour WorldGuard/GriefPrevention protection at every spawn point. Turn this
+    # off if the event area itself is a protected region and nothing can spawn.
+    respectRegionProtection: true
+    # Carved pumpkin helmet so the undead do not burn when a raid runs into daylight. An
+    # archetype that brings its own helmet keeps it - give such a mob a helmet it can wear in
+    # the sun, or it will burn.
+    pumpkinHeads: true
+    # Show the names below above the attackers' heads. Off by default - with a large wave
+    # a forest of name plates is more noise than atmosphere. Even while hidden the name is
+    # still used in death messages ("... was slain by Rotting One").
+    nameVisible: false
+    # Names per attacker type. "default" covers everything without its own entry.
+    # An empty string means: no custom name at all (vanilla name). Colour codes with the
+    # section sign work, and {wave} is replaced with the wave number.
+    names:
+      default: ""
+      # ZOMBIE: "§2Rotting One"
+      # SKELETON: "§fBonewalker"
+      # HUSK: "§6Dust-Dried"
+      # ZOMBIE_VILLAGER: "§aLost Villager"
+      # WITHER_SKELETON: "§8Black Bone"
+    # Off by default so the raid cannot be used as a mob farm.
+    dropLoot: false
+    # Vanilla spawns roughly 5% of zombies as babies. They are small and fast - and hard to
+    # hit when they crowd a target. Set to false for a more predictable event.
+    babies: true
+    health: 20
+    healthPerWave: 0.15
+    # Damage against PLAYERS. Set as the attack attribute, so armour reduces it as usual.
+    damage: 3.0
+    damagePerWave: 0.1
+    # Damage against a TARGET per blow (once per second while within reach). Raw - no armour,
+    # no resistance. -1 means "same as damage", which is how it behaved before these keys.
+    # Keep them separate: player damage has to stay survivable, target damage does not.
+    targetDamage: -1
+    targetDamagePerWave: -1
+    # What the attackers care about:
+    #   target  = the objective first. A defender is only engaged while within
+    #             playerAggroRange, otherwise the attacker breaks off and walks on. (default)
+    #   players = plain vanilla behaviour - chase whoever they spot, however far.
+    focus: target
+    playerAggroRange: 6.0
+    speed: 0.26
+    # The Headless Horseman leads one wave. 0 = the last one.
+    leaderEnabled: true
+    leaderWave: 0
+    # Attackers may never rearrange the world - explosions still hurt players, but no blocks
+    # are broken. This is what lets withers join a raid over a village you want to keep.
+    noGriefing: true
+    # How far a ranged attacker (bow or crossbow) may stand off and still shoot the target.
+    # Melee attackers always have to close to target.reach.
+    rangedReach: 16.0
+    # Let attackers hurt each other. Off by default: one stray arrow is enough for a skeleton to
+    # hit a zombie, the zombie to turn on the skeleton, and the wave to thin itself out before it
+    # ever reaches the target. Also stops them standing around swinging at each other.
+    friendlyFire: false
+    # Hide the vanilla boss bar that withers and dragons bring with them. A wave with three
+    # withers otherwise fills the screen with bars and pushes the raid's own two out of view.
+    # The wave leader keeps its bar - that one is drawn by the plugin, not by the entity.
+    hideBossBars: true
+
+    # ── The attacker roster ────────────────────────────────────────────────
+    # Each entry is one archetype. Several entries may share an entity type, which is how a
+    # plain zombie and an armoured one become two different attackers.
+    #
+    #   type        entity type (required)
+    #   id          name used for maxPerWave bookkeeping; defaults to the type
+    #   weight      relative frequency among everything eligible for the wave
+    #   fromWave    first wave it can appear in (default 1)
+    #   untilWave   last wave it can appear in (0 = no end)
+    #   maxPerWave  at most this many per wave (0 = no limit)
+    #   minPerWave  at least this many per wave, drawn before the random picks (0 = pure chance).
+    #               Worth setting for anything rare: with a big roster a weight of 1 can sit out
+    #               the whole raid.
+    #   health / damage / targetDamage / speed   override the wave-wide values; omit to inherit
+    #   scale       size multiplier (needs MC 1.20.5+), 1.0 is normal
+    #   name        overrides waves.names for this archetype
+    #   equipment   weapon, offhand, helmet, chestplate, leggings, boots.
+    #               Mobs actually use what they carry - give a skeleton a bow and it shoots.
+    #               Drop chances are always zero.
+    #
+    # Which archetype spawns is drawn at random by weight, every single time.
+    mobs:
+      - type: ZOMBIE
+        weight: 5
+      - type: SKELETON
+        weight: 3
+        equipment:
+          weapon: BOW
+      - type: HUSK
+        weight: 2
+      - type: ZOMBIE_VILLAGER
+        weight: 1
+      - id: armoured_zombie
+        type: ZOMBIE
+        weight: 2
+        fromWave: 3
+        scale: 1.3
+        health: 45
+        damage: 6
+        speed: 0.24
+        name: "§2Reinforced Zombie"
+        equipment:
+          weapon: IRON_SWORD
+          helmet: IRON_HELMET
+          chestplate: IRON_CHESTPLATE
+      - id: bone_archer
+        type: SKELETON
+        weight: 2
+        fromWave: 4
+        scale: 1.15
+        health: 30
+        damage: 5
+        name: "§fBone Archer"
+        equipment:
+          weapon: BOW
+          helmet: CHAINMAIL_HELMET
+      - type: WITHER_SKELETON
+        weight: 1
+        fromWave: 5
+        equipment:
+          weapon: STONE_SWORD
+      - id: lesser_wither
+        type: WITHER
+        weight: 1
+        fromWave: 8
+        maxPerWave: 3
+        scale: 0.6
+        health: 120
+        damage: 6
+        targetDamage: 12
+        name: "§8Lesser Wither"
+
+    # Kept for compatibility: only used while "mobs" above is empty.
+    composition:
+      - ZOMBIE:5
+      - SKELETON:3
+      - HUSK:2
+      - ZOMBIE_VILLAGER:1
+      - WITHER_SKELETON:1
+
+  announce:
+    countdownSeconds: 60
+    radius: 128
+
+  # Darkness pulse around the target while the raid runs.
+  fog:
+    enabled: true
+    intervalSeconds: 45
+    durationTicks: 80
+    radius: 96
+
+  # Optional CustomJukebox disc played at the target during the raid.
+  music:
+    discId: ""
+    loop: true
+
+  # Console commands per defender. Placeholders: {player}, {wave}
+  # Defenders are everyone who was within participationRadius of the target
+  # during the raid, plus everyone who killed an attacker.
+  rewards:
+    participationRadius: 96
+    victory:
+      - "give {player} diamond 3"
+      - "give {player} golden_apple 2"
+    consolation:
+      - "give {player} bread 8"
+
+  # On defeat the raid ends by itself: attackers are cleared, the consolation rewards go out,
+  # and the place is left marked for a short while - particles and darkness, no block changes.
+  # Once that runs out the raid returns to idle on its own and can be started again.
+  # Set enabled to false to finish the instant the last target falls.
+  defeat:
+    effect:
+      enabled: true
+      durationSeconds: 20

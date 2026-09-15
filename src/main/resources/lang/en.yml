@@ -33,6 +33,8 @@ command:
     usage: "§7Usage: §e/{label} <spawn|remove|info|set|armor|ability|loot>"
     removed: "§aBoss removed."
     info-header: "§6§l── Boss Configuration ──"
+    info-live: "§7Currently alive: §b{health}§7/§b{max} §7HP"
+    info-inactive: "§7No boss alive right now."
     set-usage: "§7Usage: §e/{label} set <health|damage|speed|spawnChance|enabled> <value>"
     set-success: "§aSet §e{key} §ato §b{value}§a. Use §e/spooky reload §ato apply."
     loot-usage: "§7Usage: §e/{label} loot <add|remove|list>"
@@ -50,6 +52,29 @@ command:
     info-abilities: "§6§l── Abilities ──"
     info-loot: "§6§l── Loot ──"
 
+  raid:
+    usage: "§7Usage: §e/{label} <start|stop|status|target>"
+    started: "§6The raid has been started."
+    stopped: "§7The raid has been called off."
+    not-running: "§7No raid is running."
+    target-usage: "§7Usage: §e/{label} target <info|mode|set|add|list|remove|clear|region>"
+    target-added: "§aTarget #{index} added at §e{world} §b{x}/{y}/{z}§a."
+    target-removed: "§aTarget #{index} removed."
+    target-cleared: "§aAll extra targets removed - the single target is used again."
+    target-list-header: "§6§l── Targets ──"
+    target-list-entry: "§e#{index} §7{entry}"
+    target-list-empty: "§7No extra targets set - the single target from target set is used."
+    remove-usage: "§7Usage: §e/{label} target remove <number>"
+    invalid-index: "§cNo target with that number."
+    target-mode: "§7Target mode: §e{mode}"
+    target-objective: "§7Objective: §e{world} §7{x}/{y}/{z} §7— §b{health} HP"
+    target-region: "§7Region: §e{region} §7in §e{world} §7— breach limit §b{limit}"
+    mode-usage: "§7Usage: §e/{label} target mode <objective|region>"
+    mode-set: "§aTarget mode set to §e{mode}§a. Use §e/spooky reload §ato apply."
+    target-set: "§aObjective placed at §e{world} §b{x}/{y}/{z}§a."
+    region-usage: "§7Usage: §e/{label} target region <name>"
+    region-set: "§aTarget region set to §e{region} §ain §e{world}§a."
+
 trickortreat:
   cooldown: "§7You already knocked here. Try again later!"
   treat: "§6Treat! ✨"
@@ -64,6 +89,58 @@ boss:
   spawn: "§c§lA Headless Horseman has appeared nearby!"
   defeated: "§a§lThe Headless Horseman has been defeated!"
 
+raid:
+  objective-name: "Warding Statue"
+  objective-label: "§6§lTarget §7— §a{health}§7/§a{max}"
+  objective-label-lost: "§8§lFallen"
+  attacker-name: "Risen"
+  announce: "§4§lThe dead are stirring. §cThey will reach us in {seconds} seconds."
+  countdown: "§c{seconds}..."
+  wave-start: "§c§lWave {wave}§c of {total} is upon us!"
+  wave-cleared: "§aWave {wave} of {total} has been broken."
+  break: "§7Wave {wave} in {seconds} seconds. Catch your breath."
+  leader: "§4§lThe Headless Horseman rides at their head!"
+  victory: "§a§lThe line held! §aAll {waves} waves were driven back."
+  defeat: "§4§lThe target has fallen. §cThe attack broke through on wave {wave}."
+  aborted: "§7The attack has been called off."
+  bar:
+    wave: "§c§lWave {wave}/{total} §7— §f{alive} standing"
+    target: "§6§lTarget §7— §f{percent}%"
+  title:
+    incoming: "§4§lThey are coming"
+    wave: "§c§lWave {wave}/{total}"
+    leader: "§4§lThe Horseman"
+    victory: "§a§lHeld"
+    defeat: "§4§lFallen"
+  subtitle:
+    incoming: "§7Take your positions."
+    wave: "§7Hold the line."
+    leader: "§7He rides at their head."
+    victory: "§7Not one of them got through."
+    defeat: "§7There is nothing left to defend."
+  status:
+    header: "§6§l── Raid ──"
+    state: "§7State: §e{state}"
+    idle: "§7No raid is running."
+    wave: "§7Wave §e{wave}§7/§e{total} §7— §f{alive} alive, {pending} still to come"
+    target-objectives: "§7Targets standing: §a{alive}§7/§a{total}"
+    target-objective: "§7  #{index} §7at §e{x}/{y}/{z}§7: §b{health}§7/§b{max}"
+    target-region: "§7Region §e{region}§7: §b{breaches}§7/§b{limit} §7breaches"
+    participants: "§7Defenders: §e{count}"
+  error:
+    already-running: "§cA raid is already running."
+    disabled: "§cThe raid feature is disabled in the config."
+    no-waves: "§craid.waves.count must be at least 1."
+    no-composition: "§craid.waves.composition contains no usable entity types."
+    no-target: "§cNo usable target configured - see /spookyraid target info."
+    world-disabled: "§cThe target world is not listed in enabledWorlds."
+    target-timeout: "§cThe target location did not finish loading in time."
+    peaceful: "§cThe target world is on Peaceful difficulty - no monster can spawn there."
+    no-worldguard: "§cRegion mode needs WorldGuard with a working region lookup."
+    no-region: "§cThat region does not exist in this world."
+    objective-entity: "§craid.target.objective.entity is not a living entity type."
+    objective-spawn: "§cThe objective could not be spawned - see the server log."
+
 item:
   candy-apple: "Candy Apple"
   cookies: "Cookies"
@@ -71,7 +148,9 @@ item:
 
 update:
   available: "§aA new version of SpookySeason is available: §e{version}"
-  download: "§7Download: §b{url}"
+  download-prefix: "§7Download: "
+  modrinth: "§b[Modrinth]"
+  curseforge: "§6[CurseForge]"
 
 rewards:
   received: "§6§lCongratulations! §aYou placed §e#{rank}§a in the treat leaderboard! Your reward has been delivered."

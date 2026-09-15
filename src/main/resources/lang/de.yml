@@ -33,6 +33,8 @@ command:
     usage: "§7Nutzung: §e/{label} <spawn|remove|info|set|armor|ability|loot>"
     removed: "§aBoss entfernt."
     info-header: "§6§l── Boss-Konfiguration ──"
+    info-live: "§7Gerade am Leben: §b{health}§7/§b{max} §7LP"
+    info-inactive: "§7Gerade lebt kein Boss."
     set-usage: "§7Nutzung: §e/{label} set <health|damage|speed|spawnChance|enabled> <value>"
     set-success: "§a{key} §aauf §b{value} §agesetzt. Nutze §e/spooky reload §azum Anwenden."
     loot-usage: "§7Nutzung: §e/{label} loot <add|remove|list>"
@@ -50,6 +52,29 @@ command:
     info-abilities: "§6§l── Fähigkeiten ──"
     info-loot: "§6§l── Loot ──"
 
+  raid:
+    usage: "§7Nutzung: §e/{label} <start|stop|status|target>"
+    started: "§6Der Überfall wurde gestartet."
+    stopped: "§7Der Überfall wurde abgeblasen."
+    not-running: "§7Es läuft gerade kein Überfall."
+    target-usage: "§7Nutzung: §e/{label} target <info|mode|set|add|list|remove|clear|region>"
+    target-added: "§aZiel #{index} bei §e{world} §b{x}/{y}/{z} §ahinzugefügt."
+    target-removed: "§aZiel #{index} entfernt."
+    target-cleared: "§aAlle Zusatzziele entfernt - es gilt wieder das Einzelziel."
+    target-list-header: "§6§l── Ziele ──"
+    target-list-entry: "§e#{index} §7{entry}"
+    target-list-empty: "§7Keine Zusatzziele gesetzt - es gilt das Einzelziel aus target set."
+    remove-usage: "§7Nutzung: §e/{label} target remove <Nummer>"
+    invalid-index: "§cKein Ziel mit dieser Nummer."
+    target-mode: "§7Ziel-Modus: §e{mode}"
+    target-objective: "§7Objekt: §e{world} §7{x}/{y}/{z} §7— §b{health} LP"
+    target-region: "§7Region: §e{region} §7in §e{world} §7— Durchbruchsgrenze §b{limit}"
+    mode-usage: "§7Nutzung: §e/{label} target mode <objective|region>"
+    mode-set: "§aZiel-Modus auf §e{mode} §agesetzt. Nutze §e/spooky reload §azum Anwenden."
+    target-set: "§aZiel gesetzt auf §e{world} §b{x}/{y}/{z}§a."
+    region-usage: "§7Nutzung: §e/{label} target region <name>"
+    region-set: "§aZiel-Region auf §e{region} §ain §e{world} §agesetzt."
+
 trickortreat:
   cooldown: "§7Du hast hier schon geklingelt. Versuch es später nochmal!"
   treat: "§6Süßes! ✨"
@@ -64,6 +89,58 @@ boss:
   spawn: "§c§lEin Kopfloser Reiter ist in der Nähe aufgetaucht!"
   defeated: "§a§lDer Kopflose Reiter wurde besiegt!"
 
+raid:
+  objective-name: "Wächterstatue"
+  objective-label: "§6§lZiel §7— §a{health}§7/§a{max}"
+  objective-label-lost: "§8§lGefallen"
+  attacker-name: "Auferstandener"
+  announce: "§4§lDie Toten regen sich. §cIn {seconds} Sekunden sind sie hier."
+  countdown: "§c{seconds}..."
+  wave-start: "§c§lWelle {wave}§c von {total} ist da!"
+  wave-cleared: "§aWelle {wave} von {total} ist gebrochen."
+  break: "§7Welle {wave} in {seconds} Sekunden. Verschnauft."
+  leader: "§4§lDer Kopflose Reiter führt sie an!"
+  victory: "§a§lDie Linie hat gehalten! §aAlle {waves} Wellen wurden zurückgeschlagen."
+  defeat: "§4§lDas Ziel ist gefallen. §cIn Welle {wave} sind sie durchgebrochen."
+  aborted: "§7Der Überfall wurde abgeblasen."
+  bar:
+    wave: "§c§lWelle {wave}/{total} §7— §f{alive} übrig"
+    target: "§6§lZiel §7— §f{percent}%"
+  title:
+    incoming: "§4§lSie kommen"
+    wave: "§c§lWelle {wave}/{total}"
+    leader: "§4§lDer Reiter"
+    victory: "§a§lGehalten"
+    defeat: "§4§lGefallen"
+  subtitle:
+    incoming: "§7Auf die Posten."
+    wave: "§7Haltet die Linie."
+    leader: "§7Er reitet an ihrer Spitze."
+    victory: "§7Keiner ist durchgekommen."
+    defeat: "§7Es ist nichts mehr zu verteidigen."
+  status:
+    header: "§6§l── Überfall ──"
+    state: "§7Zustand: §e{state}"
+    idle: "§7Es läuft gerade kein Überfall."
+    wave: "§7Welle §e{wave}§7/§e{total} §7— §f{alive} am Leben, {pending} noch ausstehend"
+    target-objectives: "§7Ziele stehen noch: §a{alive}§7/§a{total}"
+    target-objective: "§7  #{index} §7bei §e{x}/{y}/{z}§7: §b{health}§7/§b{max}"
+    target-region: "§7Region §e{region}§7: §b{breaches}§7/§b{limit} §7Durchbrüche"
+    participants: "§7Verteidiger: §e{count}"
+  error:
+    already-running: "§cEs läuft bereits ein Überfall."
+    disabled: "§cDas Überfall-Feature ist in der Config abgeschaltet."
+    no-waves: "§craid.waves.count muss mindestens 1 sein."
+    no-composition: "§craid.waves.composition enthält keine brauchbaren Entity-Typen."
+    no-target: "§cKein brauchbares Ziel konfiguriert - siehe /spookyraid target info."
+    world-disabled: "§cDie Zielwelt steht nicht in enabledWorlds."
+    target-timeout: "§cDer Zielort wurde nicht rechtzeitig fertig geladen."
+    peaceful: "§cDie Zielwelt steht auf Schwierigkeit „Peaceful“ - dort kann kein Monster spawnen."
+    no-worldguard: "§cDer Region-Modus braucht WorldGuard mit funktionierender Regions-Abfrage."
+    no-region: "§cDiese Region gibt es in dieser Welt nicht."
+    objective-entity: "§craid.target.objective.entity ist kein Lebewesen-Typ."
+    objective-spawn: "§cDas Ziel konnte nicht gesetzt werden - siehe Server-Log."
+
 item:
   candy-apple: "Kandierter Apfel"
   cookies: "Kekse"
@@ -71,7 +148,9 @@ item:
 
 update:
   available: "§aEine neue Version von SpookySeason ist verfügbar: §e{version}"
-  download: "§7Download: §b{url}"
+  download-prefix: "§7Download: "
+  modrinth: "§b[Modrinth]"
+  curseforge: "§6[CurseForge]"
 
 rewards:
   received: "§6§lGlückwunsch! §aDu hast Platz §e#{rank}§a in der Süßes-Rangliste erreicht! Deine Belohnung wurde zugestellt."
