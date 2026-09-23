@@ -1,23 +1,8 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.Sound
- *  org.bukkit.SoundCategory
- *  org.bukkit.World
- *  org.bukkit.entity.Bat
- *  org.bukkit.entity.Entity
- *  org.bukkit.entity.EntityType
- *  org.bukkit.entity.Player
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- */
 package org.example.feature;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.Bukkit;
@@ -126,7 +111,7 @@ public class BatSwarmManager {
             }
         }
         catch (Exception e) {
-            this.plugin.getLogger().warning("BatSwarm tick error: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "BatSwarm tick error", e);
         }
     }
 

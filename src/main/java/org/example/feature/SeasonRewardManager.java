@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Bukkit;
-import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -19,9 +18,14 @@ import org.bukkit.plugin.Plugin;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
 import org.example.prefs.PlayerStats;
+import org.example.util.Reward;
 import org.example.util.Scheduler;
 import org.example.util.YamlSaver;
 
+/**
+ * Season-end rewards for the top treat collectors: items and experience per rank, given through
+ * the inventory API. Players who are offline at the time receive theirs on their next join.
+ */
 public class SeasonRewardManager
 implements Listener {
     private final Plugin plugin;
@@ -48,8 +52,8 @@ implements Listener {
 
     public void start() {
         this.stop();
-        // wasActive is deliberately NOT refreshed here: if the server was down across the end of
-        // the season, the edge would otherwise be lost forever and the rewards never handed out.
+        // wasActive is not refreshed here: if the server was down across the end of the season,
+        // the transition would otherwise be lost and the rewards never handed out.
         this.checkTask = Scheduler.runTimer(this.plugin, this::checkTransition, 1200L, 1200L);
     }
 
@@ -63,8 +67,8 @@ implements Listener {
     }
 
     private void checkTransition() {
-        // Deliberately the calendar window rather than isSeasonActive(): a manual /spooky off is
-        // not the end of the season and must not hand out rewards.
+        // The calendar window rather than isSeasonActive(): a manual /spooky off is not the end
+        // of the season and must not hand out rewards.
         boolean nowActive = SpookySeason.get().isInSeasonWindow();
         boolean seasonEnded = this.wasActive && !nowActive;
         boolean dirty = false;
@@ -105,56 +109,32 @@ implements Listener {
     private void distribute() {
         List<Map.Entry<UUID, Integer>> topList = SpookySeason.get().stats().getTopTreats(10);
         if (topList.isEmpty()) {
-            this.plugin.getLogger().info("No treats collected – skipping reward distribution.");
+            this.plugin.getLogger().info("No treats collected - skipping reward distribution.");
             return;
         }
-        ConfigurationSection rewardsSection = this.plugin.getConfig().getConfigurationSection("seasonEndRewards.commands");
-        if (rewardsSection == null) {
-            this.plugin.getLogger().warning("No seasonEndRewards.commands section found in config.");
-            return;
-        }
-        HashMap<Integer, List<String>> rewardsByRank = new HashMap<Integer, List<String>>();
-        for (String key : rewardsSection.getKeys(false)) {
-            try {
-                int r = Integer.parseInt(key);
-                List<String> cmds = rewardsSection.getStringList(key);
-                if (cmds.isEmpty()) continue;
-                rewardsByRank.put(r, cmds);
-            }
-            catch (NumberFormatException r) {}
-        }
+        Map<Integer, Reward> rewardsByRank = this.rewardsByRank();
         if (rewardsByRank.isEmpty()) {
-            this.plugin.getLogger().warning("No valid reward entries found in seasonEndRewards.commands.");
+            this.plugin.getLogger().warning("No valid reward entries found in seasonEndRewards.ranks.");
             return;
         }
         this.plugin.getLogger().info("Distributing season-end rewards...");
         int rank = 1;
         for (Map.Entry<UUID, Integer> entry : topList) {
             UUID uuid = entry.getKey();
-            List<String> commands = rewardsByRank.get(rank);
-            if (commands == null || commands.isEmpty()) {
+            Reward reward = rewardsByRank.get(rank);
+            if (reward == null || reward.isEmpty()) {
                 ++rank;
                 continue;
             }
-            int currentRank = rank;
             String playerName = PlayerStats.resolveName(uuid);
-            List<String> resolved = commands.stream().map(cmd -> cmd.replace("{player}", playerName).replace("{rank}", String.valueOf(currentRank)).replace("{treats}", String.valueOf(entry.getValue()))).toList();
             Player online = Bukkit.getPlayer(uuid);
             if (online != null && online.isOnline()) {
-                // The reward commands touch the player's inventory — on Folia that only works
-                // from their region thread, not from the global tick this check runs on.
-                Scheduler.runOnEntity(this.plugin, online, () -> {
-                    if (!online.isOnline()) {
-                        this.queuePending(uuid, resolved);
-                        return;
-                    }
-                    this.executeCommands(resolved);
-                    online.sendMessage(Lang.get("rewards.received", "rank", String.valueOf(currentRank)));
-                });
+                reward.give(this.plugin, online);
+                online.sendMessage(Lang.get("rewards.received", "rank", String.valueOf(rank)));
             } else {
-                this.queuePending(uuid, resolved);
+                this.queuePending(uuid, reward.toLines());
             }
-            this.plugin.getLogger().info("Rank #" + rank + ": " + playerName + " (" + String.valueOf(entry.getValue()) + " treats)");
+            this.plugin.getLogger().info("Rank #" + rank + ": " + playerName + " (" + entry.getValue() + " treats)");
             ++rank;
         }
         // Without the reset, every further distribution would reward the same cumulative top list again.
@@ -162,20 +142,43 @@ implements Listener {
         this.plugin.getLogger().info("Treat stats reset after reward distribution.");
     }
 
+    /** Rewards per rank from {@code seasonEndRewards.ranks}, keyed by the numeric rank. */
+    private Map<Integer, Reward> rewardsByRank() {
+        HashMap<Integer, Reward> result = new HashMap<Integer, Reward>();
+        ConfigurationSection ranks = this.plugin.getConfig().getConfigurationSection("seasonEndRewards.ranks");
+        if (ranks == null) {
+            return result;
+        }
+        for (String key : ranks.getKeys(false)) {
+            int rank;
+            try {
+                rank = Integer.parseInt(key);
+            }
+            catch (NumberFormatException e) {
+                continue;
+            }
+            Reward reward = Reward.from(ranks.getConfigurationSection(key), this.plugin.getLogger());
+            if (reward.isEmpty()) continue;
+            result.put(rank, reward);
+        }
+        return result;
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player player = e.getPlayer();
         UUID uuid = player.getUniqueId();
-        List<String> commands = this.takePending(uuid);
-        if (commands.isEmpty()) {
+        List<String> lines = this.takePending(uuid);
+        if (lines.isEmpty()) {
             return;
         }
-        // Put them back if the player does not survive the wait — on Folia also for the case
-        // where Folia never runs the task at all because of the logout (retired).
-        Runnable requeue = () -> this.queuePending(uuid, commands);
+        Reward reward = Reward.fromLines(lines, this.plugin.getLogger());
+        // Put them back if the player does not survive the wait; on Folia also for the case
+        // where the task is never run because of the logout (retired).
+        Runnable requeue = () -> this.queuePending(uuid, lines);
         Scheduler.runEntityLater(this.plugin, player, () -> {
             if (player.isOnline()) {
-                this.executeCommands(commands);
+                reward.give(this.plugin, player);
                 player.sendMessage(Lang.get("rewards.received-late", new String[0]));
             } else {
                 requeue.run();
@@ -183,35 +186,29 @@ implements Listener {
         }, requeue, 60L);
     }
 
-    /** Takes the pending commands and clears them at once — otherwise a relog reads them again (dupe). */
+    /** Takes the pending reward lines and clears them at once, so a relog cannot read them twice. */
     private List<String> takePending(UUID uuid) {
         String path = "pending." + String.valueOf(uuid);
-        List<String> commands;
+        List<String> lines;
         synchronized (this.pendingCfg) {
-            commands = List.copyOf(this.pendingCfg.getStringList(path));
-            if (commands.isEmpty()) {
-                return commands;
+            lines = List.copyOf(this.pendingCfg.getStringList(path));
+            if (lines.isEmpty()) {
+                return lines;
             }
             this.pendingCfg.set(path, null);
         }
         this.pendingSaver.save();
-        return commands;
+        return lines;
     }
 
-    private void queuePending(UUID uuid, List<String> commands) {
+    private void queuePending(UUID uuid, List<String> lines) {
         String path = "pending." + String.valueOf(uuid);
         synchronized (this.pendingCfg) {
             ArrayList<String> merged = new ArrayList<String>(this.pendingCfg.getStringList(path));
-            merged.addAll(commands);
+            merged.addAll(lines);
             this.pendingCfg.set(path, merged);
         }
         this.pendingSaver.save();
-    }
-
-    private void executeCommands(List<String> commands) {
-        for (String cmd : commands) {
-            Bukkit.dispatchCommand((CommandSender)Bukkit.getConsoleSender(), cmd);
-        }
     }
 
     private String snapshotPending() {

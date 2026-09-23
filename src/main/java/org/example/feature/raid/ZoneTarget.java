@@ -21,8 +21,8 @@ import org.example.util.Scheduler;
  * WorldGuard region is in {@link RegionTarget} — every attacker that gets inside counts as a breach
  * and is removed, and {@code breachLimit} breaches lose the raid.
  *
- * <p>Exists so the region mode does not force WorldGuard on anyone. Zones are set up in game with
- * {@code /spookyraid zone pos1|pos2|save}, which is the same shape SiteZero uses for its arenas.
+ * <p>Requires no other plugin. Zones are set up in game with
+ * {@code /spookyraid zone pos1|pos2|save}.
  */
 public class ZoneTarget implements RaidTarget {
 

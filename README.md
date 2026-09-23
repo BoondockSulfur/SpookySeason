@@ -4,7 +4,7 @@ Halloween event plugin for Paper/Folia **1.21.x and 26.x** — trick-or-treating
 moon nights, the Headless Horseman, an undead raid on a target your players have to defend, bat
 swarms, jumpscares and season-end rewards.
 
-Current version: **1.4.0**
+Current version: **1.5.0**
 
 ## Features
 
@@ -35,7 +35,7 @@ and deliberately excluded from it.
 | `/spooky on` \| `off` | `spooky.admin` | Sets `active` in the config and starts or stops all features. **Not** a season end, so no rewards are handed out. |
 | `/spooky status` | `spooky.admin` | Is the season active right now? |
 | `/spooky reload` | `spooky.admin` | Reloads config and language files and restarts the managers. |
-| `/spooky rewards` | `spooky.admin` | Hands out the season-end rewards now and resets the treat statistics. |
+| `/spooky rewards` | `spooky.admin` | Hands out the season-end rewards (`seasonEndRewards.ranks`, items and experience per rank) now and resets the treat statistics. |
 | `/spooky spawn boss` | `spooky.admin`, in game only | Spawns the boss next to you. Exempt from the auto-despawn. |
 | `/spooky optout` | everyone, in game only | Toggles your own participation in all effects. |
 | `/spooky top` | everyone | Treat leaderboard (top 10), can be disabled with `treatLeaderboard.enabled`. |
@@ -88,7 +88,7 @@ Registered automatically as soon as PlaceholderAPI is installed.
 
 ## Configuration
 
-`config.yml` is commented throughout. Three things worth knowing:
+`config.yml` is commented throughout.
 
 **When is the season active?** Only when `active: true` **and** the calendar window matches.
 `activeWindow` always refers to **October**; `startDay: 0` or `endDay: 0` means "active all year".
@@ -101,15 +101,15 @@ active to inactive — not on a manual `/spooky off`. Two consequences:
 - If the server was down across the transition, it is caught up: the last state lives in
   `reward-state.yml`.
 
-**New config keys** are added on every start without overwriting existing values or comments.
-Obsolete keys are not removed.
+**New config keys** are added on every start without overwriting existing values or comments;
+keys of removed features are cleaned up.
 
 ### The undead raid
 
 The raid depends on neither `activeWindow` nor `active`. It only ever starts through
 `/spookyraid start` or through its own window under `raid.schedule` — deliberately, so it can be
-tested outside October without bending the season settings. `enabledWorlds` still applies, though:
-if the target world is not listed, the start is refused.
+tested outside October. `enabledWorlds` still applies: if the target world is not listed, the start
+is refused.
 
 Three kinds of target, switched with `raid.target.mode`:
 
@@ -131,12 +131,10 @@ Three kinds of target, switched with `raid.target.mode`:
 `/spookyraid zone list` shows them all, `remove <name>` deletes one. They live in
 `raid.target.zones` as `world,x1,y1,z1,x2,y2,z2` and can be maintained by hand there too.
 
-**Important:** the spawn ring has to sit **outside** the zone. Otherwise the attackers appear inside
-it, count as breaches immediately, and the raid is lost within seconds without a single mob ever
-walking. The plugin warns at startup with the minimum distance needed.
+The spawn ring has to lie outside the zone; otherwise attackers appear inside it and count as
+breaches immediately. The plugin warns at start with the minimum distance needed.
 
-The `region` mode needs WorldGuard **with a working region lookup**; if it is missing, the start
-reports that properly instead of quietly doing nothing.
+The `region` mode requires WorldGuard; without it the start is refused with a message.
 
 **Several objectives** go into `raid.target.objective.points` — one line each as `world,x,y,z` or
 `world,x,y,z,health`, all in the same world. While the list is empty, the single point from
@@ -152,11 +150,8 @@ reports that properly instead of quietly doing nothing.
 `lose` decides when the raid is lost: `all` (default, only once every objective has fallen), `any`
 (as soon as the first one does) or a number of fallen objectives.
 
-**Why `style: display` is the default:** a mob as the target has a hitbox — 1.4 × 2.7 blocks for an
-iron golem. Every sword swing that grazes it lands on the target, gets cancelled and is spent. Small
-attackers in front of it, baby zombies above all, are then nearly impossible to hit. A display
-object has no hitbox at all and therefore none of that. The mob style is still available through
-`style: entity`.
+`style: display` (default) uses a display entity without a hitbox, so player attacks aimed at
+attackers next to the target are not intercepted by it. `style: entity` uses a mob instead.
 
 How it runs: announcement with a countdown, then wave after wave of attackers walking at the target,
 with a breather in between. A wave holds `baseMobs + (wave − 1) × mobsPerWave` attackers, but never
@@ -184,12 +179,12 @@ Everything about him is editable individually, in `config.yml` under `halloweenB
 /spookyboss loot add NETHERITE_INGOT:2
 ```
 
-The shipped 100 HP date back to when he only turned up at night near a single player. For a wave
-leader facing a full server, 900–3000 is a workable starting range.
+The default of 100 HP suits the night-time encounter with a single player. For a wave leader
+facing many defenders, 900–3000 is a reasonable starting range.
 
-On **victory** `raid.rewards.victory` runs, on **defeat** `raid.rewards.consolation` — per defender,
-meaning everyone who was within `participationRadius` of the target during the raid or killed an
-attacker. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
+On **victory** every defender receives `raid.rewards.victory`, on **defeat** `raid.rewards.consolation`:
+items (`MATERIAL:amount`) and experience, given through the inventory API. Defenders are everyone
+who was within `participationRadius` of the target during the raid or killed an attacker. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
 (particles and darkness, **no** block changes); no new raid can start during that time, and
 `/spookyraid stop` ends it immediately.
 
@@ -203,17 +198,14 @@ Two separate paths, which explains most of the knobs:
 | Damage | `targetDamage`, raw — no armour, no resistance | `damage`, set as the attack attribute, reduced by armour |
 | Animation | the swing is triggered by the plugin | vanilla |
 
-`targetDamage: -1` means "same as `damage`". Separate values are almost always better: player damage
-has to stay survivable, target damage does not — with a single knob one of the two is inevitably
-wrong.
+`targetDamage: -1` means "same as `damage`". Separate values are recommended: player damage has to
+stay survivable, target damage does not.
 
 **What the attackers go after** is controlled by `focus`:
 
 - `target` (default) — the objective comes first. A defender is only engaged while within
-  `playerAggroRange`; beyond that the attacker breaks off and walks on. Without it an entire wave
-  trails a single player across the map while the target goes untouched. **Anything else an attacker
-  picks up on its own is dropped** — withers otherwise attack every non-undead mob, and one stray
-  chicken parks one of them 25 blocks from the target for the rest of the wave.
+  `playerAggroRange`; beyond that the attacker breaks off and continues. Any other target the mob AI
+  picks up on its own (animals, other mobs) is dropped.
 - `players` — plain vanilla behaviour, players first, however far away.
 
 Both are attacked either way: players through the mob AI, the target through proximity.
@@ -239,22 +231,20 @@ attackers:
 | `spawnRadiusMin` / `spawnRadiusMax` | An own spawn ring for this archetype instead of the wave-wide one |
 | `equipment` | `weapon`, `offhand`, `helmet`, `chestplate`, `leggings`, `boots` |
 
-**Equipment is actually used** — a zombie with an `IRON_SWORD` hits with it, and an archer shoots the
-target from up to `raid.waves.rangedReach` blocks away instead of walking up to it. That needs help
-from the plugin: the target has no hitbox, so a real arrow could never connect — the shot is
-cosmetic and the plugin books the damage. Drop chances are always zero. Careful: an archetype with
-a helmet of its own does not get a pumpkin and will burn in daylight.
+Equipment is used by the mob: a zombie with an `IRON_SWORD` hits with it, and an archer shoots the
+target from up to `raid.waves.rangedReach` blocks away and holds its position there. The target has
+no hitbox, so the arrow is cosmetic and the plugin applies the damage. Drop chances are always zero.
+An archetype with a helmet of its own does not receive a pumpkin and burns in daylight.
 
 Which archetype spawns is **drawn fresh every time**, weighted by `weight` among everything unlocked
 for the current wave. The number of waves is set by `raid.waves.count`.
 
-**`minPerWave` matters for rare archetypes.** With twenty-odd entries a `weight: 1` can mean a mob
-never turns up at all — measured: five archetypes did not appear once across ten waves. A minimum
-guarantees them. If the minimums add up to more than a wave holds, not all of them fit; the plugin
-warns at startup with the wave number affected.
+`minPerWave` guarantees rare archetypes: with a large roster, a `weight: 1` entry may not appear in
+a raid at all. If the minimums add up to more than a wave holds, the plugin warns at start with the
+wave number affected.
 
-**Special mobs are pure configuration.** The shipped suggestion includes a reinforced zombie from
-wave 3, an archer from wave 4 and up to three scaled-down withers from wave 8:
+Special mobs are configuration only. The shipped roster includes a reinforced zombie from wave 3,
+an archer from wave 4 and up to three scaled-down withers from wave 8:
 
 ```yaml
       - id: lesser_wither
@@ -269,15 +259,11 @@ wave 3, an archer from wave 4 and up to three scaled-down withers from wave 8:
         name: "§8Lesser Wither"
 ```
 
-**Withers travel badly.** They move by their own flight control rather than pathfinding, and reliably
-get stuck somewhere in the open. Rather than fighting that, let them appear **right at the target**
-with `spawnRadiusMin: 0` and `spawnRadiusMax: 5`; the journey then does not happen at all. Measured:
-distance consistently under 5 blocks instead of 25 to 70.
+Withers move by their own flight control rather than pathfinding and are unreliable at crossing
+open ground. Spawn them next to the target with `spawnRadiusMin: 0` and `spawnRadiusMax: 5`.
 
-**Ender dragons are no use as attackers.** They can be entered as an archetype and do spawn (size and
-health apply), but then they do not move: `EnderDragon` is not a `Mob`, so it has no pathfinding, and
-its vanilla AI hangs off the End podium. Measured: two dragons stood on the same coordinate for 36
-seconds. For something airborne use phantoms; for a third kind of boss, the scaled-down wither.
+Ender dragons are not usable as attackers: `EnderDragon` is not a `Mob` and has no pathfinding.
+Use phantoms for airborne attackers.
 
 **Names per mob type** go into `raid.waves.names` — `default` applies to everything without an entry
 of its own, and an empty string means "no name" (the default). Colour codes with `§` work, and
@@ -291,60 +277,49 @@ of its own, and an empty string means "no name" (the default). Colour codes with
       WITHER_SKELETON: "§8Black Bone"
 ```
 
-`nameVisible` only controls the text above their heads; it is off deliberately, because a large wave
-turns into a forest of name plates. The name still has an effect while hidden — it shows up in death
-messages.
+`nameVisible` only controls the text above their heads and is off by default. A hidden name still
+appears in death messages.
 
-### Things that will catch you out
+### Notes
 
-- **`peaceful` difficulty**: the server refuses every monster spawn there. The start therefore
-  refuses with a clear message instead of letting a wave run into nothing.
-- **`respectRegionProtection`** (default `true`) checks every single spawn point against WorldGuard
-  and GriefPrevention. If the event area itself is a protected region, nothing gets through — the
-  raid reports that in the log and runs with fewer attackers. Either move the spawn ring outwards
-  (`spawnRadiusMin`/`spawnRadiusMax`) or turn this off for the event world.
-- **`raid.waves.dropLoot`** is `false` deliberately. Otherwise the raid is a mob farm.
-- **For a large event, raise `maxAlive` first.** That is the real limit on how much pressure arrives
-  at once — `baseMobs` alone does nothing while the cap sits at 40. Rough starting points are in the
-  config comments.
-- **After a defeat the raid ends by itself.** Attackers are cleared, the consolation reward goes out,
-  the place stays marked for `raid.defeat.effect.durationSeconds` (default 20 s), and then everything
-  returns to idle and a new raid can be started. `raid.defeat.effect.enabled: false` finishes the
-  instant the last target falls.
-- **Attackers do not hurt each other** (`raid.waves.friendlyFire`, off by default). One stray arrow
-  is enough otherwise: a skeleton hits a zombie, the zombie turns on the skeleton, and the wave thins
-  itself out before it reaches the target. Both are blocked — the hit itself **and** the damage over
-  time from wither, poison and magic, which arrives later with no damager attached. Measured over 75
-  seconds with four withers in the wave: 1 loss with the protection, 7 without.
-- **Attackers that stop making progress get a nudge** (`unstickSpeed`). A path does not move
-  everything: a wither flies by its own control and otherwise just hovers, and ground mobs get caught
-  on terrain. What is measured is simply whether the distance to the target is shrinking.
-- **Spawn points sit on the ground, not in treetops.** `getHighestBlockYAt` returns the canopy over a
-  forest, so the search walks down from there for the first solid block that is neither leaves nor
-  logs and has two blocks of clear space above it. That also rules out spawning in water or under an
-  overhang. The search only goes a few blocks below the surface — going all the way down finds the
-  first cave, and an attacker in one is stuck there for the whole raid. If nothing is found in a
-  column, the attempt counts as failed and another spot is rolled.
-- **Withers and dragons bring their own vanilla bossbar.** `raid.waves.hideBossBars` (on by default)
-  hides it — with three withers in a wave they otherwise fill the screen and push the raid's own two
-  bars out of view. The wave leader keeps his, because that one is drawn by the plugin.
-- **`raid.debug: true`** logs each attacker's position, distance to the target, actual target and
-  whether it has a path. Very noisy, but exactly the tool for "the attackers never arrive".
+- `peaceful` difficulty: the server refuses monster spawns, so the start is refused with a message.
+- `respectRegionProtection` (default `true`) checks every spawn point against WorldGuard and
+  GriefPrevention. If the event area itself is protected, no attacker can spawn; the raid reports
+  that in the log. Move the spawn ring outwards or disable the check for the event world.
+- `raid.waves.dropLoot` is `false` by default so the raid cannot be used as a mob farm.
+- For a large event, raise `maxAlive` first; `baseMobs` has no effect beyond that cap. Starting
+  points are in the config comments.
+- After a defeat the raid ends by itself: attackers are cleared, the consolation reward is handed
+  out, the site stays marked for `raid.defeat.effect.durationSeconds` (default 20 s), then the raid
+  returns to idle. `raid.defeat.effect.enabled: false` finishes the instant the last target falls.
+- `raid.waves.friendlyFire` (off by default): attackers do not damage each other, including the
+  damage over time from wither, poison and magic. Damage caused by defenders, including splash
+  potions, is not affected.
+- `unstickSpeed`: attackers whose distance to the target stops shrinking are nudged. This covers
+  withers, which move by their own flight control, and ground mobs caught on terrain.
+- Spawn points are placed on the ground: the search starts at the highest block, skips leaves and
+  logs, requires two blocks of clear space and refuses liquids. It only searches a few blocks below
+  the surface so attackers do not spawn in caves. A column without a valid spot counts as a failed
+  attempt.
+- `raid.waves.hideBossBars` (on by default) hides the vanilla boss bars of withers and dragons. The
+  wave leader keeps its bar, which is drawn by the plugin.
+- `raid.debug: true` logs each attacker's position, distance to the target, actual target and path
+  state. Verbose; intended for diagnosing attackers that do not arrive.
 
 A `/spooky reload` does **not** abort a running raid: it carries on with the configuration snapshot
 taken when it started. `/spooky off` does abort it.
 
 ### First install on a server
 
-On its first start the plugin creates `config.yml` and the language files and is live from that
-moment. Three things worth knowing **beforehand**:
+On its first start the plugin creates `config.yml` and the language files and is active from that
+moment.
 
-- **`enabledWorlds` ships empty, and empty means ALL worlds** — the build world included. Enter the
-  worlds you want before the first start or right after, then `/spooky reload`.
-- **`activeWindow` is set to 27–31 October.** Outside that window, trick-or-treat, the blood moon,
-  ghosts, bats, jumpscares and the boss auto-spawn stay dormant by themselves.
-- **The raid does not depend on the season window**, but only starts through `/spookyraid start` or
-  through `raid.schedule`, and that is off by default. It will not go off unasked.
+- `enabledWorlds` ships empty, and empty means all worlds. Enter the intended worlds before the
+  first start or directly afterwards, then `/spooky reload`.
+- `activeWindow` is set to 27–31 October. Outside that window, trick-or-treat, the blood moon,
+  ghosts, bats, jumpscares and the boss auto-spawn stay inactive.
+- The raid does not depend on the season window. It only starts through `/spookyraid start` or
+  through `raid.schedule`, which is off by default.
 
 ### Files in the plugin folder
 
@@ -378,39 +353,6 @@ the minimum, `folia-supported: true`. The attributes renamed in MC 1.21.3 (`GENE
 `MAX_HEALTH`) are resolved at runtime through the registry (`util/Attributes`, with a fallback to the
 legacy keys) rather than through enum constants.
 
-Evidence for 1.3.0:
-
-- **Bytecode check**: all 302 API references in the built JAR (Bukkit/Paper, Adventure, Gson) were
-  resolved against the API JARs of Paper **1.21**, **1.21.4**, **26.1.2** and **26.2** — complete in
-  all four. Attributes appear, as expected, only as a `Registry.ATTRIBUTE` lookup, never as a
-  version-bound enum constant.
-- **Live test on Folia 26.2** (test server): loading, enabling, all console commands,
-  `/spooky reload`, config and language file creation and a clean shutdown — no errors.
-
-For 1.4.0 the raid was tested extensively on Folia 26.2 and on a Paper 26.1.2 server: all start
-refusals, the full state machine across ten waves, every archetype of a 21-entry roster with its
-equipment, ranged combat, the separate damage values, the boss health pool past 1024, friendly-fire
-protection, and a zone raid through to defeat.
-
-**Limits of that testing:** most of it ran through the console with no player logged in. The
-player-facing paths — bossbars, titles, sounds, the rewards handed to defenders, the GUI, jumpscares
-and trick-or-treat — are **not** verified that way. Anyone repeating this should set `activeWindow`
-to `0/0`, otherwise practically every feature bows out again outside October and the test only
-really checks the startup.
-
-## History
-
-⚠️ The original source (up to v1.1.0) was lost — not locally, not in the backups (D1-P1 / T7) and not
-on GitHub. This project was decompiled from the built `spookyseason-1.1.0.jar` on 2026-07-01
-(CFR 0.152) and rebuilt and cleaned up as a Maven project on 2026-07-02 (v1.2.0). The current state
-is v1.4.0, see [CHANGELOG.md](CHANGELOG.md).
-
-- `jars/` — the rescued original builds (`0.0.1` … `1.1.0`). The only reliable original state.
-- `src-decompiled/` — the unmodified CFR decompilation of `1.1.0` (reference).
-- `resources/` — the unmodified resources from `1.1.0` (reference, like `src-decompiled/`).
-- `src/main/` — the working, fixed source base. The embedded bStats copy was replaced by the real
-  `org.bstats:bstats-bukkit` dependency with shade relocation.
-
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
@@ -418,9 +360,8 @@ See [CHANGELOG.md](CHANGELOG.md).
 ## Build
 
 ```bash
-mvn package        # → target/spookyseason-1.4.0.jar
+mvn package        # → target/spookyseason-1.5.0.jar
 ```
 
-Requires **JDK 25**. The bytecode itself targets Java 21 (`maven.compiler.release`), but the
-`paper-api` for MC 26.1.2 ships as class file version 69 (Java 25) — with a JDK 21 even reading the
-dependency fails ("cannot access org.bukkit.Bukkit").
+Requires JDK 25 to build. The bytecode targets Java 21 (`maven.compiler.release`); the `paper-api`
+for MC 26.1.2 ships as class file version 69 and cannot be read by a JDK 21.

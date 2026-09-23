@@ -1,7 +1,7 @@
 package org.example.cmd;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,8 +29,9 @@ TabCompleter {
     private static final List<String> TARGET_SUBS = List.of("info", "mode", "set", "add", "list", "remove", "clear", "region");
     private static final List<String> MODES = List.of("objective", "zone", "region");
     private static final List<String> ZONE_SUBS = List.of("pos1", "pos2", "save", "list", "remove");
-    /** Corner selections per player, in memory only - a restart simply forgets them. */
-    private static final Map<UUID, Location[]> SELECTION = new HashMap<UUID, Location[]>();
+    // Corner selections per player, in memory only. Concurrent because on Folia each player's
+    // command runs on that player's region thread.
+    private static final Map<UUID, Location[]> SELECTION = new ConcurrentHashMap<UUID, Location[]>();
 
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("spooky.admin")) {

@@ -101,7 +101,7 @@ halloweenBoss:
   enabled: true
   # Health is tracked by the plugin, so this is NOT capped at 1024 like the vanilla max_health
   # attribute. The entity holds one chunk of it and is topped back up as the pool drains; the
-  # boss bar always shows the pool, not the entity. Rough guide for a wave leader facing a
+  # boss bar always shows the pool, not the entity. Starting range for a wave leader facing a
   # server full of defenders: 900-3000.
   spawnChance: 0.005
   # Minimum delay before the boss can spawn again after being defeated.
@@ -145,26 +145,32 @@ treatLeaderboard:
   enabled: true
 
 # ── Season-End Rewards ─────────────────────────────────────
-# Console commands executed for top treat collectors when the season ends.
-# Placeholders: {player}, {rank}, {treats}
+# Items and experience for the top treat collectors when the season ends, per rank.
+# Items as MATERIAL:amount; whatever does not fit into the inventory is dropped at the
+# player's feet. Offline winners receive their reward on their next join.
 # Auto-distributes when the activeWindow closes, or manually via /spooky rewards.
 # Note: with startDay/endDay set to 0 (always active) that transition never happens,
 # so rewards are only ever handed out manually. A manual /spooky off does NOT count
 # as a season end either. If the server was offline during the transition, it is
 # caught up on the next start (state is kept in reward-state.yml).
-# Offline winners receive rewards on next join.
 seasonEndRewards:
   enabled: true
-  commands:
+  ranks:
     1:
-      - "give {player} diamond 5"
-      - "give {player} netherite_ingot 1"
+      items:
+        - DIAMOND:5
+        - NETHERITE_INGOT:1
+      xp: 0
     2:
-      - "give {player} diamond 3"
-      - "give {player} golden_apple 2"
+      items:
+        - DIAMOND:3
+        - GOLDEN_APPLE:2
+      xp: 0
     3:
-      - "give {player} diamond 1"
-      - "give {player} golden_apple 1"
+      items:
+        - DIAMOND:1
+        - GOLDEN_APPLE:1
+      xp: 0
 
 # ── Undead Raid ────────────────────────────────────────────
 # Waves of undead march on a defended target. Defenders hold the line; if the
@@ -174,8 +180,8 @@ raid:
   enabled: true
 
   # Per-attacker diagnostics in the server log (position, distance to target, what it is
-  # actually targeting, whether it has a path). Very noisy - only for tracking down
-  # "the attackers never arrive" style problems.
+  # actually targeting, whether it has a path). Verbose; intended for diagnosing attackers
+  # that do not arrive.
   debug: false
 
   # Optional automatic start. Independent of activeWindow.
@@ -275,7 +281,7 @@ raid:
     # the sun, or it will burn.
     pumpkinHeads: true
     # Show the names below above the attackers' heads. Off by default - with a large wave
-    # a forest of name plates is more noise than atmosphere. Even while hidden the name is
+    # many name plates clutter the view. Even while hidden the name is
     # still used in death messages ("... was slain by Rotting One").
     nameVisible: false
     # Names per attacker type. "default" covers everything without its own entry.
@@ -316,8 +322,8 @@ raid:
     # Attackers may never rearrange the world - explosions still hurt players, but no blocks
     # are broken. This is what lets withers join a raid over a village you want to keep.
     noGriefing: true
-    # How far a ranged attacker (bow or crossbow) may stand off and still shoot the target.
-    # Melee attackers always have to close to target.reach.
+    # How far a ranged attacker (bow or crossbow) may stand off and still shoot the target. Within
+    # this distance it holds its position. Melee attackers always have to close to target.reach.
     rangedReach: 16.0
     # Let attackers hurt each other. Off by default: one stray arrow is enough for a skeleton to
     # hit a zombie, the zombie to turn on the skeleton, and the wave to thin itself out before it
@@ -328,7 +334,7 @@ raid:
     # The wave leader keeps its bar - that one is drawn by the plugin, not by the entity.
     hideBossBars: true
     # Nudge along any attacker whose distance to the target has stopped shrinking. A path alone
-    # does not move everything: a wither flies by its own control and simply hovers, and ground
+    # does not move everything: a wither flies by its own control and hovers, and ground
     # mobs get caught on terrain. 0 turns it off, unstickMinDistance is what counts as arrived.
     unstickSpeed: 0.35
     unstickMinDistance: 5.0
@@ -344,15 +350,14 @@ raid:
     #   untilWave   last wave it can appear in (0 = no end)
     #   maxPerWave  at most this many per wave (0 = no limit)
     #   minPerWave  at least this many per wave, drawn before the random picks (0 = pure chance).
-    #               Worth setting for anything rare: with a big roster a weight of 1 can sit out
-    #               the whole raid.
+    #               Useful for rare archetypes: with a large roster a weight of 1 may not
+    #               appear in a raid at all.
     #   health / damage / targetDamage / speed   override the wave-wide values; omit to inherit
     #   scale       size multiplier (needs MC 1.20.5+), 1.0 is normal
     #   name        overrides waves.names for this archetype
     #   spawnRadiusMin / spawnRadiusMax   override the wave-wide spawn ring for this archetype.
-    #               Worth it for anything that travels badly: a wither moves by its own flight
-    #               control and is unreliable at crossing open ground, so set 0/4 and it simply
-    #               arrives at the objective instead of trying to fly there.
+    #               Useful for mobs that travel badly: a wither moves by its own flight control
+    #               and is unreliable at crossing open ground; with 0/4 it spawns at the objective.
     #   equipment   weapon, offhand, helmet, chestplate, leggings, boots.
     #               Mobs actually use what they carry - give a skeleton a bow and it shoots.
     #               Drop chances are always zero.
@@ -433,16 +438,20 @@ raid:
     discId: ""
     loop: true
 
-  # Console commands per defender. Placeholders: {player}, {wave}
-  # Defenders are everyone who was within participationRadius of the target
-  # during the raid, plus everyone who killed an attacker.
+  # Items (MATERIAL:amount) and experience per defender. Defenders are everyone who was
+  # within participationRadius of the target during the raid, plus everyone who killed an
+  # attacker. Items that do not fit into the inventory are dropped at the player's feet.
   rewards:
     participationRadius: 96
     victory:
-      - "give {player} diamond 3"
-      - "give {player} golden_apple 2"
+      items:
+        - DIAMOND:3
+        - GOLDEN_APPLE:2
+      xp: 0
     consolation:
-      - "give {player} bread 8"
+      items:
+        - BREAD:8
+      xp: 0
 
   # On defeat the raid ends by itself: attackers are cleared, the consolation rewards go out,
   # and the place is left marked for a short while - particles and darkness, no block changes.

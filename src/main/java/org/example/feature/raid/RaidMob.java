@@ -136,11 +136,8 @@ public final class RaidMob {
     }
 
     /**
-     * Guaranteed minimum per wave, or {@code 0} for "leave it to chance".
-     *
-     * <p>Worth setting for anything rare and dramatic. With a roster of twenty-odd archetypes a
-     * {@code weight} of 1 means a mob may well sit out the entire raid, which is no good when the
-     * whole point of it was to show up in the final wave.
+     * Guaranteed minimum per wave, or {@code 0} for "leave it to chance". Useful for rare
+     * archetypes that a low weight would otherwise leave out of a raid entirely.
      */
     public int minPerWave() {
         return this.minPerWave;
@@ -190,11 +187,8 @@ public final class RaidMob {
     }
 
     /**
-     * Distance band this archetype appears in, or the wave-wide value when it sets none.
-     *
-     * <p>Worth overriding for anything that travels badly. A wither moves by its own flight
-     * control and is unreliable at crossing thirty blocks of terrain; dropping it in at the
-     * objective sidesteps the journey entirely.
+     * Distance band this archetype appears in, or the wave-wide value when it sets none. Useful
+     * for mobs that travel badly, such as withers, which can be spawned next to the objective.
      */
     public double spawnRadiusMinOr(double fallback) {
         return this.spawnRadiusMin < 0.0 ? fallback : this.spawnRadiusMin;
@@ -208,10 +202,7 @@ public final class RaidMob {
         return !this.equipment.isEmpty();
     }
 
-    /**
-     * Applies the configured gear. Drop chances are forced to zero throughout: the gear exists
-     * so the mob fights with it, not so the raid turns into a loot fountain.
-     */
+    /** Applies the configured gear. Drop chances are forced to zero throughout. */
     public void equip(EntityEquipment eq) {
         for (Map.Entry<String, Material> entry : this.equipment.entrySet()) {
             ItemStack item = new ItemStack(entry.getValue());

@@ -18,8 +18,7 @@ public final class Attributes {
     public static final Attribute KNOCKBACK_RESISTANCE = resolve("knockback_resistance", "generic.knockback_resistance");
     /**
      * Entity size multiplier. Only exists from MC 1.20.5 onwards, so this one is resolved
-     * leniently: on an older server it stays null and callers simply skip it, instead of
-     * taking the whole plugin down at enable time.
+     * leniently: on an older server it stays null and callers skip it.
      */
     public static final Attribute SCALE = resolveOptional("scale", "generic.scale");
 

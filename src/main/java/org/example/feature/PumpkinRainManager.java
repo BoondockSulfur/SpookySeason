@@ -1,22 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.Material
- *  org.bukkit.Particle
- *  org.bukkit.Sound
- *  org.bukkit.SoundCategory
- *  org.bukkit.World
- *  org.bukkit.entity.Entity
- *  org.bukkit.entity.Item
- *  org.bukkit.entity.Player
- *  org.bukkit.inventory.ItemStack
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.util.Vector
- */
 package org.example.feature;
 
 import java.util.logging.Level;

@@ -1,36 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  net.kyori.adventure.text.Component
- *  net.kyori.adventure.text.TextComponent
- *  net.kyori.adventure.text.format.NamedTextColor
- *  net.kyori.adventure.text.format.TextColor
- *  net.kyori.adventure.text.format.TextDecoration
- *  org.bukkit.Location
- *  org.bukkit.Particle
- *  org.bukkit.Sound
- *  org.bukkit.SoundCategory
- *  org.bukkit.World
- *  org.bukkit.block.Block
- *  org.bukkit.block.data.Bisected$Half
- *  org.bukkit.block.data.BlockData
- *  org.bukkit.block.data.type.Door
- *  org.bukkit.entity.Entity
- *  org.bukkit.entity.EntityType
- *  org.bukkit.entity.LivingEntity
- *  org.bukkit.entity.Player
- *  org.bukkit.entity.Villager
- *  org.bukkit.event.EventHandler
- *  org.bukkit.event.Listener
- *  org.bukkit.event.block.Action
- *  org.bukkit.event.player.PlayerInteractEntityEvent
- *  org.bukkit.event.player.PlayerInteractEvent
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.potion.PotionEffect
- *  org.bukkit.potion.PotionEffectType
- */
 package org.example.feature;
 
 import java.util.List;
@@ -98,8 +65,8 @@ implements Listener {
         if (e.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-        // Interact events fire once per hand; without this filter the off-hand click runs
-        // straight into the cooldown just set and spams the cooldown message.
+        // Interact events fire once per hand; the off-hand event would otherwise hit the
+        // cooldown just set and repeat the cooldown message.
         if (e.getHand() != EquipmentSlot.HAND) {
             return;
         }
@@ -116,7 +83,7 @@ implements Listener {
             return;
         }
         String key = this.doorCooldownKey(p.getUniqueId(), b, door);
-        if (!this.checkCooldown(p, key)) {
+        if (!this.checkCooldown(p, key, true)) {
             return;
         }
         this.rollTrickOrTreat(p);
@@ -145,9 +112,7 @@ implements Listener {
         }
         Villager villager = (Villager)entity;
         Player p = e.getPlayer();
-        // Sneaking always means trading: without this escape hatch every villager swallows the
-        // trading right-click once per cooldown window, with no way for the player to work
-        // around it deliberately.
+        // Sneaking always means trading, so a player can always reach the trade screen.
         if (p.isSneaking() && this.plugin.getConfig().getBoolean("trickOrTreatVillagers.sneakToTrade", true)) {
             return;
         }
@@ -158,7 +123,8 @@ implements Listener {
             return;
         }
         String key = this.villagerCooldownKey(p.getUniqueId(), villager);
-        if (!this.checkCooldown(p, key)) {
+        // Silently: a click inside the cooldown window is an ordinary trade.
+        if (!this.checkCooldown(p, key, false)) {
             // No trick-or-treat (cooldown still running) means the event is NOT cancelled.
             // Otherwise trading with villagers would be blocked for the whole season.
             return;
@@ -167,14 +133,17 @@ implements Listener {
         this.rollTrickOrTreat(p);
     }
 
-    private boolean checkCooldown(Player p, String key) {
+    /** @param notify whether the player is told about a running cooldown */
+    private boolean checkCooldown(Player p, String key, boolean notify) {
         long now = System.currentTimeMillis();
         this.cooldown.entrySet().removeIf(entry -> (Long)entry.getValue() < now);
         // On top of the per-door/villager cooldown there is a global per-player one; otherwise a
         // row of doors allows unlimited farming for the season rewards.
         String globalKey = String.valueOf(p.getUniqueId()) + ":global";
         if (now < this.cooldown.getOrDefault(key, 0L) || now < this.cooldown.getOrDefault(globalKey, 0L)) {
-            p.sendMessage(Lang.get("trickortreat.cooldown", new String[0]));
+            if (notify) {
+                p.sendMessage(Lang.get("trickortreat.cooldown", new String[0]));
+            }
             return false;
         }
         this.cooldown.put(key, now + (long)this.plugin.getConfig().getInt("trickOrTreat.cooldownSeconds", 90) * 1000L);

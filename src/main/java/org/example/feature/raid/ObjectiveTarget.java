@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.DoubleAdder;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
@@ -39,22 +41,16 @@ import org.example.util.Scheduler;
  * Target flavour "objects with health": one or more fixed points the attackers have to bring
  * down.
  *
- * <p>Two decisions here come straight out of testing on a live server:
- *
  * <ul>
- * <li><b>The plugin tracks the health itself</b> rather than using the entity attribute. Vanilla
- *     caps {@code max_health} at 1024, far too little for an event with many players. Tracking it
- *     here makes the value free and keeps the readout honest about what was configured.</li>
- * <li><b>By default the target is a display object, not a mob</b> ({@code style: display}).
- *     Display entities have no hitbox at all, so they never swallow a sword swing. With a mob as
- *     the target, every blow that grazes its hitbox lands on the target instead, gets cancelled
- *     and is spent — which makes small attackers in front of it (baby zombies!) nearly impossible
- *     to hit. The mob style is still available via {@code style: entity}.</li>
+ * <li>The plugin tracks the health itself rather than using the entity attribute, which vanilla
+ *     caps at 1024.</li>
+ * <li>By default the target is a display entity ({@code style: display}). Display entities have
+ *     no hitbox, so player attacks aimed at attackers next to the target are not intercepted by
+ *     it. A mob can still be used via {@code style: entity}.</li>
  * </ul>
  *
- * <p>Damage therefore comes from proximity rather than from real hits: every attacker within
- * {@code reach} strikes once per second. That is identical in both styles, so it plays the same
- * either way.
+ * <p>Damage comes from proximity rather than from real hits: every attacker within {@code reach}
+ * strikes once per second, identically in both styles.
  */
 public class ObjectiveTarget implements RaidTarget {
 
@@ -94,6 +90,7 @@ public class ObjectiveTarget implements RaidTarget {
     private final double reach;
     private final int loseMode;
 
+    private final AtomicInteger pendingSpawns = new AtomicInteger();
     private volatile boolean ready;
     private volatile String failure;
     private volatile int spawnCursor;
@@ -104,7 +101,7 @@ public class ObjectiveTarget implements RaidTarget {
         this.world = world;
         this.objectives.addAll(objectives);
         this.displayStyle = !"entity".equalsIgnoreCase(cfg.getString("style", "display"));
-        this.reach = Math.max(1.0, cfg.getDouble("reach", 3.0));
+        this.reach = Math.max(1.0, cfg.getDouble("reach", 4.0));
         this.loseMode = ObjectiveTarget.parseLoseMode(cfg.getString("lose", "all"));
     }
 
@@ -189,12 +186,17 @@ public class ObjectiveTarget implements RaidTarget {
         }
     }
 
+    /**
+     * Places the visuals. On Folia that happens on each objective's region thread, so the target
+     * only counts as ready once every placement has completed; the manager waits within its
+     * grace period.
+     */
     @Override
     public boolean prepare() {
+        this.pendingSpawns.set(this.objectives.size());
         for (Objective objective : this.objectives) {
             Scheduler.runAtLocation(this.plugin, objective.anchor, () -> this.spawnVisual(objective));
         }
-        this.ready = true;
         return true;
     }
 
@@ -209,7 +211,12 @@ public class ObjectiveTarget implements RaidTarget {
         }
         catch (Exception e) {
             this.failure = "raid.error.objective-spawn";
-            this.plugin.getLogger().warning("Raid objective could not be placed: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "Raid objective could not be placed", e);
+        }
+        finally {
+            if (this.pendingSpawns.decrementAndGet() <= 0 && this.failure == null) {
+                this.ready = true;
+            }
         }
     }
 
@@ -239,7 +246,7 @@ public class ObjectiveTarget implements RaidTarget {
         le.setSilent(this.cfg.getBoolean("silent", true));
         le.setCollidable(false);
         le.setGlowing(this.cfg.getBoolean("glowing", true));
-        // Invulnerable: the plugin tracks the health, the entity is nothing but appearance.
+        // Invulnerable: the plugin tracks the health, the entity is only the visual.
         le.setInvulnerable(true);
         AttributeInstance max = le.getAttribute(Attributes.MAX_HEALTH);
         if (max != null) {
@@ -440,15 +447,13 @@ public class ObjectiveTarget implements RaidTarget {
         if (objective == null) {
             return;
         }
-        // A shooter may stand off; everyone else has to close to melee range.
-        double effectiveReach = ranged ? Math.max(this.reach, rangedReach) : this.reach;
-        if (loc.distanceSquared(objective.anchor) > effectiveReach * effectiveReach) {
+        if (!this.withinReach(loc, objective, ranged, rangedReach)) {
             return;
         }
         objective.damageTaken.add(waveDamage);
         if (attacker instanceof LivingEntity) {
-            // Damage against the target is pure bookkeeping inside the plugin. Without an
-            // animation it looks like the attackers are just loitering next to it.
+            // Damage against the target is bookkeeping inside the plugin; the swing is the
+            // visible feedback.
             LivingEntity shooter = (LivingEntity)attacker;
             shooter.swingMainHand();
             if (ranged) {
@@ -465,13 +470,26 @@ public class ObjectiveTarget implements RaidTarget {
         }
     }
 
+    /** A shooter may stand off; everyone else has to close to melee range. */
+    private boolean withinReach(Location from, Objective objective, boolean ranged, double rangedReach) {
+        double effectiveReach = ranged ? Math.max(this.reach, rangedReach) : this.reach;
+        return from.distanceSquared(objective.anchor) <= effectiveReach * effectiveReach;
+    }
+
+    /** An attacker within reach of a living objective holds its position. */
+    @Override
+    public boolean holdsPosition(Location from, boolean ranged, double rangedReach) {
+        if (!this.ready) {
+            return false;
+        }
+        Objective objective = this.nearestAlive(from);
+        return objective != null && this.withinReach(from, objective, ranged, rangedReach);
+    }
+
     /**
-     * Fires a purely cosmetic arrow at the target.
-     *
-     * <p>The target has no hitbox, so a real shot could never connect — the damage is applied by
-     * the plugin either way. Without this an archer walks up to the target and quietly melees it,
-     * which makes the bow it is carrying look like decoration. The arrow deals no damage of its
-     * own and is cleaned up shortly afterwards so a wave of archers does not litter the field.
+     * Fires a purely cosmetic arrow at the target. The target has no hitbox, so a real shot could
+     * not connect; the damage is applied by the plugin. The arrow deals no damage and is removed
+     * shortly afterwards.
      */
     private void shootAt(LivingEntity shooter, Objective objective) {
         Location eye = shooter.getEyeLocation();
@@ -512,12 +530,9 @@ public class ObjectiveTarget implements RaidTarget {
     }
 
     /**
-     * Only the entity style offers something that can be targeted.
-     *
-     * <p>Measured on Folia 26.2: slipping in a decoy achieves nothing — mob AI discards a
-     * {@code setTarget} aimed at something it would never attack on its own within the same tick
-     * ({@code actualTarget=none}). Attackers therefore advance via the path from
-     * {@link #navTarget}, which does work reliably.
+     * Only the entity style offers something that can be targeted. Mob AI discards a
+     * {@code setTarget} aimed at an entity it would not attack on its own, so display-style
+     * attackers advance via the path from {@link #navTarget}.
      */
     @Override
     public LivingEntity attackTarget(Location from) {

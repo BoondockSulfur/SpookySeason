@@ -1,20 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Bukkit
- *  org.bukkit.NamespacedKey
- *  org.bukkit.World
- *  org.bukkit.command.CommandExecutor
- *  org.bukkit.command.PluginCommand
- *  org.bukkit.command.TabCompleter
- *  org.bukkit.configuration.file.FileConfiguration
- *  org.bukkit.entity.Entity
- *  org.bukkit.event.Listener
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.plugin.java.JavaPlugin
- */
 package org.example;
 
 import java.io.File;
@@ -66,6 +49,8 @@ import org.example.util.Scheduler;
 public final class SpookySeason
 extends JavaPlugin {
     private static SpookySeason instance;
+    /** Configuration paths of removed features; cleaned up on every start. */
+    private static final List<String> OBSOLETE_CONFIG_PATHS = List.of("seasonEndRewards.commands");
     private NamespacedKey entityMarker;
     private NamespacedKey ghostMarker;
     private NamespacedKey raidMarker;
@@ -141,15 +126,14 @@ extends JavaPlugin {
 
     public void onEnable() {
         instance = this;
-        // Resolves the attributes through the registry (1.21.x and 26.x keys). If that fails it
-        // should blow up right here, not later during a boss spawn.
+        // Resolves the attributes through the registry (1.21.x and 26.x keys). A failure should
+        // surface at enable time, not later during a spawn.
         Attributes.init();
         this.entityMarker = new NamespacedKey((Plugin)this, "spooky_entity");
         this.ghostMarker = new NamespacedKey((Plugin)this, "spooky_ghost");
         this.raidMarker = new NamespacedKey((Plugin)this, "spooky_raid");
         this.saveDefaultConfig();
-        ConfigMerger.merge((Plugin)this, "config.yml", new File(this.getDataFolder(), "config.yml"));
-        this.reloadConfig();
+        this.mergeConfig();
         Lang.load((Plugin)this);
         this.regionIntegration = new RegionIntegration((Plugin)this);
         this.customJukeboxHook = new CustomJukeboxHook((Plugin)this);
@@ -196,8 +180,8 @@ extends JavaPlugin {
     }
 
     public void onDisable() {
-        // Every stop() is guarded separately — one failure (rejected scheduling on Folia, say)
-        // must not abort the rest of the cleanup.
+        // Every stop() is guarded separately; one failure (for example rejected scheduling on
+        // Folia) must not abort the rest of the cleanup.
         this.safeStop(this.hauntedNightManager == null ? null : this.hauntedNightManager::stop, "hauntedNight");
         this.safeStop(this.pumpkinRainManager == null ? null : this.pumpkinRainManager::stop, "pumpkinRain");
         this.safeStop(this.bossManager == null ? null : this.bossManager::stop, "boss");
@@ -279,8 +263,7 @@ extends JavaPlugin {
     }
 
     public void reload() {
-        ConfigMerger.merge((Plugin)this, "config.yml", new File(this.getDataFolder(), "config.yml"));
-        this.reloadConfig();
+        this.mergeConfig();
         Lang.load((Plugin)this);
         this.hauntedNightManager.start();
         this.bossManager.start();
@@ -289,6 +272,13 @@ extends JavaPlugin {
         // Deliberately only the ticker: a running raid carries on with its frozen configuration
         // snapshot and is not torn down by a reload.
         this.raidManager.start();
+    }
+
+    private void mergeConfig() {
+        File file = new File(this.getDataFolder(), "config.yml");
+        ConfigMerger.merge((Plugin)this, "config.yml", file);
+        ConfigMerger.removeObsolete((Plugin)this, file, OBSOLETE_CONFIG_PATHS);
+        this.reloadConfig();
     }
 
     public boolean isSeasonActive() {

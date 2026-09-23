@@ -1,11 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.plugin.Plugin
- */
 package org.example.integration;
 
 import java.lang.reflect.Method;
@@ -83,8 +75,7 @@ public class CustomJukeboxHook {
             this.stopPlaybackMethod.invoke(this.api, location);
         }
         catch (Exception e) {
-            // Do not swallow this: if playback gets stuck, the ambient track keeps running past
-            // the end of the season or the night and nobody can see why.
+            // Logged: a stuck playback would otherwise keep running past the end of the night.
             this.plugin.getLogger().warning("CustomJukebox stopPlayback failed: " + e.getMessage());
         }
     }

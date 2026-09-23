@@ -1,10 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.configuration.file.YamlConfiguration
- *  org.bukkit.plugin.Plugin
- */
 package org.example.lang;
 
 import java.io.File;
@@ -26,8 +19,7 @@ public final class Lang {
     public static void load(Plugin plugin) {
         String langCode = plugin.getConfig().getString("language", "en");
         File langDir = new File(plugin.getDataFolder(), "lang");
-        // saveResource(false) logs a warning every time the file already exists — on
-        // /spooky reload that would be pure log spam.
+        // saveResource(false) logs a warning whenever the file already exists.
         if (!new File(langDir, "en.yml").exists()) {
             plugin.saveResource("lang/en.yml", false);
         }

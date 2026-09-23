@@ -1,46 +1,7 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  net.kyori.adventure.text.Component
- *  net.kyori.adventure.text.TextComponent
- *  net.kyori.adventure.text.format.NamedTextColor
- *  net.kyori.adventure.text.format.TextColor
- *  net.kyori.adventure.text.format.TextDecoration
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.Material
- *  org.bukkit.Particle
- *  org.bukkit.World
- *  org.bukkit.attribute.Attribute
- *  org.bukkit.attribute.AttributeInstance
- *  org.bukkit.boss.BarColor
- *  org.bukkit.boss.BarFlag
- *  org.bukkit.boss.BarStyle
- *  org.bukkit.boss.BossBar
- *  org.bukkit.configuration.file.FileConfiguration
- *  org.bukkit.entity.Entity
- *  org.bukkit.entity.EntityType
- *  org.bukkit.entity.LivingEntity
- *  org.bukkit.entity.Player
- *  org.bukkit.entity.SkeletonHorse
- *  org.bukkit.entity.WitherSkeleton
- *  org.bukkit.event.EventHandler
- *  org.bukkit.event.EventPriority
- *  org.bukkit.event.Listener
- *  org.bukkit.event.entity.EntityDamageByEntityEvent
- *  org.bukkit.event.entity.EntityDamageEvent
- *  org.bukkit.event.entity.EntityDeathEvent
- *  org.bukkit.inventory.EntityEquipment
- *  org.bukkit.inventory.ItemStack
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.potion.PotionEffect
- *  org.bukkit.potion.PotionEffectType
- */
 package org.example.feature;
 
 import java.util.List;
+import java.util.logging.Level;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
@@ -170,7 +131,7 @@ implements Listener {
             }
         }
         catch (Exception e) {
-            this.plugin.getLogger().warning("Boss tick error: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "Boss tick error", e);
         }
     }
 
@@ -225,7 +186,7 @@ implements Listener {
             }
         }
         catch (Exception e) {
-            this.plugin.getLogger().warning("Boss entity tick error: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "Boss entity tick error", e);
         }
     }
 

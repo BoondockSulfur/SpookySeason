@@ -16,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -68,6 +69,7 @@ import org.bukkit.util.Vector;
 import org.example.SpookySeason;
 import org.example.lang.Lang;
 import org.example.util.Attributes;
+import org.example.util.Reward;
 import org.example.util.Scheduler;
 import org.example.util.YamlSaver;
 
@@ -116,8 +118,7 @@ public class RaidManager implements Listener {
     private final AtomicInteger remainingSpawns = new AtomicInteger();
     private final AtomicInteger spawnsInFlight = new AtomicInteger();
     private final AtomicInteger spawnAttempts = new AtomicInteger();
-    // Failed spawns always have the same cause. Without this brake a wave puts dozens of
-    // identical warnings in the log and buries everything else.
+    // Failed spawns within one wave share a cause; the warning is logged once per wave.
     private final AtomicBoolean spawnFailureLogged = new AtomicBoolean();
     // How many of each archetype have spawned this wave — for maxPerWave and minPerWave.
     private final java.util.Map<String, Integer> spawnedThisWave = new ConcurrentHashMap<String, Integer>();
@@ -166,9 +167,8 @@ public class RaidManager implements Listener {
     // ── Lebenszyklus ────────────────────────────────────────────────────────
 
     /**
-     * Starts the state machine. A raid already in progress is deliberately NOT aborted:
-     * {@code /spooky reload} must not pull the ground out from under the defenders mid-assault.
-     * The running raid keeps its frozen configuration.
+     * Starts the state machine. A raid already in progress is not aborted: a reload keeps the
+     * running raid on its configuration snapshot.
      */
     public void start() {
         if (this.tickTask != null) {
@@ -348,7 +348,7 @@ public class RaidManager implements Listener {
             }
         }
         catch (Exception e) {
-            this.plugin.getLogger().warning("Raid tick error: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "Raid tick error", e);
         }
     }
 
@@ -371,8 +371,8 @@ public class RaidManager implements Listener {
             return;
         }
         if (!current.isReady()) {
-            // The target location is still loading (chunk/region). A limited grace period, then
-            // give up — otherwise the raid hangs in the countdown forever without anyone noticing.
+            // The target location may still be loading. After the grace period the start is
+            // abandoned rather than left waiting indefinitely.
             if (++this.readyGrace > TARGET_READY_GRACE_SECONDS) {
                 this.failStart("raid.error.target-timeout");
             }
@@ -403,6 +403,9 @@ public class RaidManager implements Listener {
         if (cfg.waveTimeoutSeconds > 0 && this.waveSeconds > cfg.waveTimeoutSeconds) {
             this.plugin.getLogger().warning("Raid wave " + this.waveIndex + " hit the timeout - forcing it to end.");
             this.clearAttackers();
+            // The leader is removed with the wave. A forced boss spawn never despawns on its
+            // own, and once the leader flags are cleared neither victory nor defeat removes it.
+            this.despawnLeader();
             this.finishWave(cfg);
             return;
         }
@@ -523,8 +526,8 @@ public class RaidManager implements Listener {
         if (this.leaderSeen) {
             return false;
         }
-        // The spawn runs on a region thread and has not come through yet. If it never does, the
-        // wave must not wait on it forever.
+        // The spawn runs on a region thread and has not completed yet. Bounded wait so the wave
+        // cannot block on a spawn that never happens.
         if (++this.leaderGrace > LEADER_GRACE_SECONDS) {
             this.plugin.getLogger().warning("Raid leader never appeared - continuing without it.");
             this.leaderRequested = false;
@@ -581,8 +584,8 @@ public class RaidManager implements Listener {
         if (remaining <= 0) {
             return;
         }
-        // Too many failed attempts means there is no permitted spot around the target. Better to
-        // run the wave with fewer attackers than to keep rolling dice forever.
+        // Too many failed attempts means there is no permitted spawn spot around the target;
+        // the wave runs with fewer attackers instead of retrying indefinitely.
         if (this.spawnAttempts.get() > this.waveQuota * 10 + 20) {
             this.plugin.getLogger().warning("Raid could not place " + remaining
                     + " attacker(s) around the target - check raid.waves.spawnRadius* and region protection.");
@@ -636,8 +639,8 @@ public class RaidManager implements Listener {
             });
         }
         catch (RuntimeException e) {
-            // Folia refuses scheduling for a disabled plugin, for instance — without this the
-            // counter would stay put and no wave would ever complete.
+            // Scheduling can be refused (disabled plugin on Folia); the counter must not stay
+            // incremented or the wave would never complete.
             this.spawnsInFlight.decrementAndGet();
             throw e;
         }
@@ -681,9 +684,8 @@ public class RaidManager implements Listener {
         int x = candidate.getBlockX();
         int z = candidate.getBlockZ();
         int top = Math.min(world.getHighestBlockYAt(x, z), world.getMaxHeight() - 3);
-        // Only ever look just below the surface. Searching all the way down finds the first cave
-        // instead, and an attacker spawned in one is stuck there for the whole raid - measured
-        // with withers hovering 56 and 72 blocks under the target.
+        // Only search just below the surface. Searching further down finds caves, and an
+        // attacker spawned in a cave cannot reach the target.
         int lowest = Math.max(world.getMinHeight() + 1, top - SURFACE_SEARCH_DEPTH);
         for (int y = top; y >= lowest; --y) {
             Material standing = world.getBlockAt(x, y, z).getType();
@@ -697,9 +699,8 @@ public class RaidManager implements Listener {
     }
 
     /**
-     * Room to stand in. Passable rather than strictly air: grass, flowers and snow layers sit on
-     * top of perfectly good ground, and demanding air there rejected the surface and sent the
-     * search down into the caves. Liquids are still refused - nobody should spawn in water.
+     * Room to stand in. Passable rather than strictly air, so grass, flowers and snow layers on
+     * top of solid ground are accepted. Liquids are refused.
      */
     private static boolean isClear(Block block) {
         return !block.isLiquid() && block.isPassable();
@@ -730,21 +731,20 @@ public class RaidManager implements Listener {
             this.setBaseValue(le, Attributes.SCALE, archetype.scale());
         }
         // Damage against the target depends on the archetype and is read later on the entity's
-        // own region thread — hence stored on the entity rather than in a map in the manager.
+        // region thread, so it is stored on the entity rather than in the manager.
         le.getPersistentDataContainer().set(this.targetDamageKey, PersistentDataType.DOUBLE,
                 archetype.targetDamageOr(cfg.targetDamageForWave(wave)));
         le.getPersistentDataContainer().set(this.rangedKey, PersistentDataType.BYTE,
                 (byte)(archetype.isRanged() ? 1 : 0));
         if (!cfg.babies && le instanceof org.bukkit.entity.Zombie) {
-            // Baby zombies are small and quick, and nearly impossible to hit in the scrum between
-            // defenders and target. Anyone after a predictable event turns them off here.
+            // Baby zombies are small and fast and hard to hit in a crowd; optional for a more
+            // predictable event.
             ((org.bukkit.entity.Zombie)le).setBaby(false);
         }
         if (cfg.hideBossBars && le instanceof Boss) {
-            // Withers and dragons bring their own vanilla boss bar. In a wave of several of them
-            // the screen fills with bars and the raid's own two are pushed out of sight. The one
-            // bar that should stand out is the wave leader's, and that one is drawn by the plugin,
-            // not by the entity — so it is unaffected by this.
+            // Withers and dragons bring their own vanilla boss bar; several of them push the
+            // raid's own bars out of view. The wave leader's bar is drawn by the plugin and is
+            // unaffected.
             BossBar entityBar = ((Boss)le).getBossBar();
             if (entityBar != null) {
                 entityBar.setVisible(false);
@@ -752,8 +752,7 @@ public class RaidManager implements Listener {
             }
         }
         if (le instanceof Wither) {
-            // Without this the summoning phase and its explosion run first, before the wither
-            // attacks at all — useless for a wave that is already on its way.
+            // Skip the summoning phase and its explosion so the wither attacks immediately.
             ((Wither)le).setInvulnerabilityTicks(0);
         }
         EntityEquipment eq = le.getEquipment();
@@ -776,8 +775,8 @@ public class RaidManager implements Listener {
                             : "n/a"));
         }
         if (cfg.pumpkinHeads && (eq.getHelmet() == null || eq.getHelmet().getType() == Material.AIR)) {
-            // Serves two purposes: it looks like Halloween AND the undead do not burn when the
-            // raid runs into daylight. An archetype's own helmet takes precedence.
+            // Thematic, and it keeps the undead from burning in daylight. An archetype's own
+            // helmet takes precedence.
             eq.setHelmet(new ItemStack(Material.CARVED_PUMPKIN));
             eq.setHelmetDropChance(0.0f);
         }
@@ -828,10 +827,14 @@ public class RaidManager implements Listener {
                 }
                 Mob mob = (Mob)a;
                 Location from = a.getLocation();
+                // An attacker already within reach of the target (a ranged attacker inside
+                // rangedReach) holds its position and is neither pathed nor nudged closer.
+                boolean holding = current.holdsPosition(from, attackerRanged, cfg.rangedReach);
                 // Every second, not on the retarget interval: a single impulse every few seconds
-                // is damped away long before the next one, which is exactly what left withers
-                // drifting 70 blocks off the target.
-                this.unstick(cfg, mob, from, current.navTarget(from));
+                // is damped away before the next one and does not move a hovering wither.
+                if (!holding) {
+                    this.unstick(cfg, mob, from, current.navTarget(from));
+                }
                 if (!retargetNow) {
                     return;
                 }
@@ -841,15 +844,14 @@ public class RaidManager implements Listener {
                 }
                 if (currentTarget != null && !cfg.friendlyFire
                         && this.attackerIds.contains(currentTarget.getUniqueId())) {
-                    // Locked on to one of its own. Cancelling the damage alone is not enough —
-                    // the mob would stand there swinging at an ally instead of advancing.
+                    // Targeting an ally. Cancelling the damage alone would leave the mob
+                    // attacking the ally instead of advancing.
                     mob.setTarget(null);
                     currentTarget = null;
                 }
                 if (currentTarget != null && !this.keepsTarget(cfg, currentTarget, from, aggroSquared)) {
-                    // Anything else it picked up on its own is a distraction. Withers are the
-                    // obvious case: they attack every non-undead mob, so one stray chicken parks
-                    // a wither twenty-five blocks off the target for the rest of the wave.
+                    // Any other target the AI picked up is a distraction (withers attack every
+                    // non-undead mob and would stop advancing).
                     mob.setTarget(null);
                     currentTarget = null;
                 }
@@ -861,9 +863,10 @@ public class RaidManager implements Listener {
                 if (attackTarget != null) {
                     mob.setTarget(attackTarget);
                 }
-                if (attackTarget == null || mob.getTarget() == null) {
-                    // No acceptable target (or the AI discarded it again immediately) — then at
-                    // least refresh the path.
+                if ((attackTarget == null || mob.getTarget() == null) && !holding) {
+                    // No acceptable target (or the AI discarded it immediately): refresh the
+                    // path. Not for an attacker holding its position; it is pathed again once it
+                    // leaves reach.
                     if (nav != null) {
                         mob.getPathfinder().moveTo(nav, 1.1);
                     }
@@ -904,15 +907,14 @@ public class RaidManager implements Listener {
     }
 
     /**
-     * Pushes along an attacker that is not getting anywhere.
+     * Pushes an attacker that is not making progress towards the target.
      *
-     * <p>A path is not enough for everything. A wither moves by its own flight control, so
-     * {@code Pathfinder.moveTo} leaves it hovering: measured with two of them parked 34 and 29
-     * blocks off the target, unmoved for 45 seconds, while a path was supposedly set. Rather than
-     * special-casing mob types this watches whether the distance is actually shrinking and nudges
-     * whatever is not making progress; ground mobs caught on terrain benefit from the same.
+     * <p>A path alone does not move every mob: a wither moves by its own flight control and
+     * ignores {@code Pathfinder.moveTo}, and ground mobs get caught on terrain. Instead of
+     * special-casing mob types, this checks whether the distance to the target is shrinking and
+     * nudges whatever is not making progress.
      *
-     * <p>The previous distance rides along on the entity, since this runs on its region thread.
+     * <p>The previous distance is stored on the entity, since this runs on its region thread.
      */
     private void unstick(RaidSettings cfg, Mob mob, Location from, Location nav) {
         if (cfg.unstickSpeed <= 0.0 || nav == null || !nav.getWorld().equals(from.getWorld())) {
@@ -959,7 +961,7 @@ public class RaidManager implements Listener {
         this.despawnLeader();
         this.stopMusic();
         if (cfg != null) {
-            this.runRewards(cfg.victoryCommands);
+            this.giveRewards(cfg.victory);
         }
         RaidTarget current = this.target;
         if (current != null) {
@@ -978,7 +980,7 @@ public class RaidManager implements Listener {
         this.despawnLeader();
         this.stopMusic();
         if (cfg != null) {
-            this.runRewards(cfg.consolationCommands);
+            this.giveRewards(cfg.consolation);
         }
         if (current != null) {
             current.cleanup();
@@ -1011,27 +1013,15 @@ public class RaidManager implements Listener {
         this.hideBars();
     }
 
-    private void runRewards(List<String> commands) {
-        if (commands.isEmpty() || this.participants.isEmpty()) {
+    /** Hands the reward to every defender who is online; items go through the inventory API. */
+    private void giveRewards(Reward reward) {
+        if (reward.isEmpty() || this.participants.isEmpty()) {
             return;
         }
-        int wave = this.waveIndex;
         for (UUID id : Set.copyOf(this.participants)) {
             Player p = Bukkit.getPlayer(id);
             if (p == null || !p.isOnline()) continue;
-            List<String> resolved = commands.stream()
-                    .map(c -> c.replace("{player}", p.getName()).replace("{wave}", String.valueOf(wave)))
-                    .toList();
-            // The reward commands touch the inventory — on Folia only from the player's region
-            // thread, never from the global tick.
-            Scheduler.runOnEntity(this.plugin, p, () -> {
-                if (!p.isOnline()) {
-                    return;
-                }
-                for (String c : resolved) {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), c);
-                }
-            });
+            reward.give(this.plugin, p);
         }
     }
 
@@ -1107,8 +1097,8 @@ public class RaidManager implements Listener {
         this.syncBar(this.targetBar, viewers);
     }
 
-    // Send only the difference, as the blood moon bar does — otherwise that is two pointless
-    // packets per player per second.
+    // Send only the difference, as the blood moon bar does, to avoid two packets per player per
+    // second.
     private void syncBar(BossBar bar, List<Player> viewers) {
         Set<Player> wanted = new HashSet<Player>(viewers);
         for (Player p : new ArrayList<Player>(bar.getPlayers())) {
@@ -1308,9 +1298,8 @@ public class RaidManager implements Listener {
     }
 
     /**
-     * Keeps the raid from rearranging the world. Without this a single wither wave leaves the
-     * defended village full of craters — and the whole point is defending it, not rebuilding it.
-     * Explosions still hurt players, only the block damage is dropped.
+     * Keeps the raid from changing the world: explosions still hurt players, only the block
+     * damage is dropped.
      */
     @EventHandler(ignoreCancelled=true)
     public void onRaidExplosion(EntityExplodeEvent e) {
@@ -1347,12 +1336,8 @@ public class RaidManager implements Listener {
     }
 
     /**
-     * Attackers do not fight each other.
-     *
-     * <p>A stray arrow is enough to start it: a skeleton hits a zombie, the zombie turns on the
-     * skeleton and kills it, and the wave thins itself out before it ever reaches the target. That
-     * goes for wither skulls and creeper blasts as well, which is why the damager is resolved back
-     * through projectiles.
+     * Attackers do not fight each other. A stray arrow would otherwise make a zombie turn on the
+     * skeleton that hit it. The damager is resolved through projectiles so wither skulls count too.
      */
     @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
     public void onAttackerInfighting(EntityDamageByEntityEvent e) {
@@ -1370,12 +1355,14 @@ public class RaidManager implements Listener {
     }
 
     /**
-     * The other half of not fighting each other: damage over time.
+     * The other half of not fighting each other: damage over time. The wither effect from a
+     * wither skull or poison from a witch arrives later as a plain EntityDamageEvent without a
+     * damager, so the handler above never sees it.
      *
-     * <p>Cancelling the hit is not enough. A wither skull applies the wither effect, a witch
-     * throws poison — and that damage arrives later as a plain EntityDamageEvent with no damager
-     * attached, so the handler above never sees it. Measured: with infighting supposedly off, a
-     * wave still lost attackers to their own withers.
+     * <p>Only damage caused by the raid itself is dropped. A defender's splash potion (healing
+     * against the undead, harming, poison) arrives with the same causes; its damage source names
+     * the thrower and is let through. An effect tick without any entity is treated as the raid's
+     * own.
      */
     @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
     public void onAttackerEffectDamage(EntityDamageEvent e) {
@@ -1390,13 +1377,29 @@ public class RaidManager implements Listener {
             case WITHER:
             case POISON:
             case MAGIC: {
-                e.setCancelled(true);
+                Entity origin = RaidManager.damageOrigin(e);
+                if (origin == null || this.attackerIds.contains(origin.getUniqueId())) {
+                    e.setCancelled(true);
+                }
                 break;
             }
             default: {
                 break;
             }
         }
+    }
+
+    /**
+     * The entity ultimately behind this damage, or {@code null} for damage without one (an
+     * effect tick). Resolves through projectiles and thrown potions to the entity that fired them.
+     */
+    private static Entity damageOrigin(EntityDamageEvent e) {
+        Entity causing = e.getDamageSource().getCausingEntity();
+        if (causing != null) {
+            return causing;
+        }
+        Entity direct = e.getDamageSource().getDirectEntity();
+        return direct == null ? null : RaidManager.resolveSource(direct);
     }
 
     /** Stops an ally's effect landing at all, so attackers do not walk around visibly withering. */

@@ -10,13 +10,14 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.EntityType;
+import java.util.logging.Logger;
+import org.example.SpookySeason;
 import org.example.lang.Lang;
+import org.example.util.Reward;
 
 /**
- * Snapshot of the {@code raid} configuration, taken when a raid starts.
- *
- * <p>Deliberately frozen: a {@code /spooky reload} mid-assault must not pull wave count, strength
- * or target values out from under the defenders. The next raid reads fresh values.
+ * Snapshot of the {@code raid} configuration, taken when a raid starts. A reload during a raid
+ * does not change the running raid; the next raid reads fresh values.
  */
 public final class RaidSettings {
     public final int countdownSeconds;
@@ -33,7 +34,7 @@ public final class RaidSettings {
     public final boolean respectRegionProtection;
     public final boolean pumpkinHeads;
     public final boolean nameVisible;
-    // Namen je Angreifer-Typ, Schluessel in Grossbuchstaben; "DEFAULT" gilt fuer den Rest.
+    // Names per attacker type, keys upper-case; "DEFAULT" covers the rest.
     private final Map<String, String> names = new HashMap<String, String>();
     private final boolean hasNameSection;
     public final boolean dropLoot;
@@ -70,8 +71,8 @@ public final class RaidSettings {
     public final String discId;
     public final boolean discLoop;
 
-    public final List<String> victoryCommands;
-    public final List<String> consolationCommands;
+    public final Reward victory;
+    public final Reward consolation;
     public final boolean defeatEffectEnabled;
     public final int defeatEffectSeconds;
 
@@ -138,10 +139,11 @@ public final class RaidSettings {
         this.discId = cfg.getString("raid.music.discId", "");
         this.discLoop = cfg.getBoolean("raid.music.loop", true);
 
-        this.victoryCommands = List.copyOf(cfg.getStringList("raid.rewards.victory"));
-        this.consolationCommands = List.copyOf(cfg.getStringList("raid.rewards.consolation"));
+        Logger log = SpookySeason.get().getLogger();
+        this.victory = Reward.from(cfg.getConfigurationSection("raid.rewards.victory"), log);
+        this.consolation = Reward.from(cfg.getConfigurationSection("raid.rewards.consolation"), log);
         this.defeatEffectEnabled = cfg.getBoolean("raid.defeat.effect.enabled", true);
-        this.defeatEffectSeconds = Math.max(0, cfg.getInt("raid.defeat.effect.durationSeconds", 120));
+        this.defeatEffectSeconds = Math.max(0, cfg.getInt("raid.defeat.effect.durationSeconds", 20));
 
         this.parseMobs(cfg);
     }
@@ -207,8 +209,7 @@ public final class RaidSettings {
 
     /**
      * Total of all guaranteed minimums for a wave. If this exceeds {@link #quotaForWave(int)} the
-     * wave cannot honour every minimum and some archetypes will be short — worth warning about,
-     * because the symptom (a mob that never turns up) looks nothing like the cause.
+     * wave cannot honour every minimum; the manager warns at start.
      */
     public int minimumsForWave(int wave) {
         int total = 0;
@@ -237,12 +238,9 @@ public final class RaidSettings {
      * @return the archetype, or {@code null} if nothing is eligible any more
      */
     public RaidMob pick(int wave, Map<String, Integer> spawnedThisWave) {
-        // Guaranteed minimums come first, so a rare archetype cannot be skipped by bad luck.
-        //
-        // Picked at random among everything still short of its minimum, NOT in config order. In
-        // order, a roster whose minimums add up to more than the wave holds starves whatever sits
-        // at the bottom of the list: measured over ten waves, the last five archetypes never
-        // spawned once while the earlier ones hit their minimum exactly.
+        // Guaranteed minimums come first, so a rare archetype cannot be skipped by chance.
+        // Picked at random among everything still short of its minimum, not in config order:
+        // in order, a roster whose minimums exceed the wave quota would starve the last entries.
         ArrayList<RaidMob> below = new ArrayList<RaidMob>();
         for (RaidMob mob : this.mobs) {
             if (!mob.availableIn(wave) || mob.minPerWave() <= 0) continue;

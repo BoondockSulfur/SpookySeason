@@ -10,9 +10,9 @@ import org.bukkit.entity.LivingEntity;
 /**
  * The thing a raid is fought over.
  *
- * <p>Two flavours, and this interface is the only place they differ: one or more objects with
- * their own health pool ({@link ObjectiveTarget}), or a WorldGuard region no attacker may get
- * into ({@link RegionTarget}).
+ * <p>Three flavours: one or more objects with their own health pool ({@link ObjectiveTarget}),
+ * a configured box ({@link ZoneTarget}), or a WorldGuard region ({@link RegionTarget}); the latter
+ * two count attackers that get inside.
  *
  * <p><b>Folia:</b> {@link #prepare()} and {@link #tick()} run on the global scheduler and must
  * therefore never touch blocks or entities directly — the implementations go through the region
@@ -77,6 +77,18 @@ public interface RaidTarget {
      */
     default LivingEntity attackTarget(Location from) {
         return null;
+    }
+
+    /**
+     * Whether an attacker standing at {@code from} is already within reach and should hold that
+     * position instead of being pathed or nudged closer. Only the objective flavour returns
+     * {@code true}; a zone or region has to be entered.
+     *
+     * @param ranged      true for an attacker that shoots instead of closing in
+     * @param rangedReach how far a ranged attacker may stand off and still hit the target
+     */
+    default boolean holdsPosition(Location from, boolean ranged, double rangedReach) {
+        return false;
     }
 
     /** Is this entity part of the target itself? Shields it from the general entity cleanup. */

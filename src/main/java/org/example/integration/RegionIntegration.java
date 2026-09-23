@@ -18,10 +18,9 @@ public class RegionIntegration {
     // All reflection signatures are resolved once, here. If that fails the integration stays off
     // and warns, rather than silently allowing everything at runtime.
     //
-    // They are resolved consistently against the DECLARED type (interface, public base class or
-    // field type), never against instance.getClass(): implementation classes are often
-    // package-private, and a Method object found on one of those cannot be invoked
-    // (IllegalAccessException). That exact trap has already bitten once on Folia.
+    // They are resolved against the declared type (interface, public base class or field type),
+    // never against instance.getClass(): implementation classes are often package-private, and a
+    // Method object found on one of those cannot be invoked (IllegalAccessException).
     private Method wgAdaptWorld;
     private Method wgGetRegionManager;
     private Method wgGetApplicableRegions;
@@ -76,7 +75,7 @@ public class RegionIntegration {
                     this.wgRegionMin = protectedRegionClass.getMethod("getMinimumPoint");
                     this.wgRegionMax = protectedRegionClass.getMethod("getMaximumPoint");
                     this.wgRegionContains = protectedRegionClass.getMethod("contains", blockVector3);
-                    // WorldEdit 7.3 hat getX()/getY()/getZ() durch x()/y()/z() ersetzt.
+                    // WorldEdit 7.3 replaced getX()/getY()/getZ() with x()/y()/z().
                     this.bvGetX = RegionIntegration.coordMethod(blockVector3, "getX", "x");
                     this.bvGetY = RegionIntegration.coordMethod(blockVector3, "getY", "y");
                     this.bvGetZ = RegionIntegration.coordMethod(blockVector3, "getZ", "z");
@@ -227,9 +226,8 @@ public class RegionIntegration {
     }
 
     /**
-     * Centre of a named region. Y is the midpoint between the lower and upper edge — anyone who
-     * needs a ground-level point has to search for it themselves, which only works on the region
-     * thread of that location.
+     * Centre of a named region. Y is the midpoint between the lower and upper edge; a
+     * ground-level point has to be looked up by the caller on the region thread of that location.
      */
     public Location regionCenter(World world, String regionName) {
         Object region = this.findRegion(world, regionName);
@@ -278,7 +276,7 @@ public class RegionIntegration {
             if (regionManager == null) {
                 return null;
             }
-            // WorldGuard fuehrt Region-IDs intern in Kleinschreibung.
+            // WorldGuard stores region IDs in lower case.
             return this.wgGetRegion.invoke(regionManager, regionName.toLowerCase(Locale.ROOT));
         }
         catch (Exception e) {

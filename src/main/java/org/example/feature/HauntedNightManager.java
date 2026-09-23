@@ -1,38 +1,9 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  net.kyori.adventure.text.Component
- *  net.kyori.adventure.text.TextComponent
- *  net.kyori.adventure.text.format.NamedTextColor
- *  net.kyori.adventure.text.format.TextColor
- *  net.kyori.adventure.text.format.TextDecoration
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.Particle
- *  org.bukkit.Sound
- *  org.bukkit.SoundCategory
- *  org.bukkit.World
- *  org.bukkit.attribute.Attribute
- *  org.bukkit.boss.BarColor
- *  org.bukkit.boss.BarFlag
- *  org.bukkit.boss.BarStyle
- *  org.bukkit.boss.BossBar
- *  org.bukkit.configuration.file.FileConfiguration
- *  org.bukkit.entity.Entity
- *  org.bukkit.entity.EntityType
- *  org.bukkit.entity.LivingEntity
- *  org.bukkit.entity.Player
- *  org.bukkit.persistence.PersistentDataType
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.potion.PotionEffect
- *  org.bukkit.potion.PotionEffectType
- */
 package org.example.feature;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -151,7 +122,7 @@ public class HauntedNightManager {
             this.tickInternal();
         }
         catch (Exception e) {
-            this.plugin.getLogger().warning("HauntedNight tick error: " + e.getMessage());
+            this.plugin.getLogger().log(Level.WARNING, "HauntedNight tick error", e);
         }
     }
 
@@ -234,8 +205,7 @@ public class HauntedNightManager {
         }
     }
 
-    // Send only the difference instead of removing and re-adding every viewer each second —
-    // that was two pointless packets per player per second.
+    // Send only the difference instead of removing and re-adding every viewer each second.
     private void showBarFor(List<Player> players, double progress) {
         Set<Player> wanted = new HashSet<Player>(players);
         Set<Player> current = new HashSet<Player>(this.bar.getPlayers());

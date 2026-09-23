@@ -1,19 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Material
- *  org.bukkit.entity.Creeper
- *  org.bukkit.entity.EntityType
- *  org.bukkit.entity.LivingEntity
- *  org.bukkit.event.EventHandler
- *  org.bukkit.event.Listener
- *  org.bukkit.event.entity.CreatureSpawnEvent
- *  org.bukkit.event.entity.CreatureSpawnEvent$SpawnReason
- *  org.bukkit.event.entity.EntityDeathEvent
- *  org.bukkit.inventory.EntityEquipment
- *  org.bukkit.inventory.ItemStack
- */
 package org.example.feature;
 
 import java.util.concurrent.ThreadLocalRandom;

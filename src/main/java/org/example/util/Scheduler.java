@@ -1,13 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  org.bukkit.Bukkit
- *  org.bukkit.Location
- *  org.bukkit.entity.Entity
- *  org.bukkit.plugin.Plugin
- *  org.bukkit.scheduler.BukkitTask
- */
 package org.example.util;
 
 import java.lang.reflect.Method;
@@ -44,11 +34,9 @@ public final class Scheduler {
     }
 
     /**
-     * The DECLARED return type of the Bukkit getter, i.e. the public scheduler interface.
-     *
-     * <p>Important: some of Folia's implementation classes are package-private. A Method object
-     * found through {@code instance.getClass()} then cannot be invoked (IllegalAccessException) —
-     * the method has to be looked up on the public interface.
+     * The declared return type of the Bukkit getter, i.e. the public scheduler interface. Some
+     * of Folia's implementation classes are package-private, so a Method found through
+     * {@code instance.getClass()} cannot be invoked; lookups go through the public interface.
      */
     private static Class<?> schedulerType(String getterName) {
         try {
@@ -123,9 +111,12 @@ public final class Scheduler {
      * has moved into a different region since the call.
      */
     public static void runOnEntity(Plugin plugin, Entity entity, Runnable task) {
+        // getScheduler is resolved on the Entity interface, not on entity.getClass(): the declared
+        // return type is the public EntityScheduler interface and one cache entry serves every
+        // entity type.
         if (FOLIA) {
             try {
-                Method getScheduler = Scheduler.cachedMethod(entity.getClass(), "getScheduler", 0);
+                Method getScheduler = Scheduler.cachedMethod(Entity.class, "getScheduler", 0);
                 Object entityScheduler = getScheduler.invoke((Object)entity);
                 Class<?> schedulerType = getScheduler.getReturnType();
                 Consumer<Object> consumer = t -> task.run();
@@ -151,13 +142,12 @@ public final class Scheduler {
 
     /**
      * Like {@link #runEntityLater(Plugin, Entity, Runnable, long)}, but with a callback for the
-     * case where the entity disappears before the delay elapses (a logout on Folia, say). Anything
-     * doing binding work in that task would otherwise lose it silently.
+     * case where the entity disappears before the delay elapses (for example a logout on Folia).
      */
     public static void runEntityLater(Plugin plugin, Entity entity, Runnable task, Runnable onRetired, long delayTicks) {
         if (FOLIA) {
             try {
-                Method getScheduler = Scheduler.cachedMethod(entity.getClass(), "getScheduler", 0);
+                Method getScheduler = Scheduler.cachedMethod(Entity.class, "getScheduler", 0);
                 Object entityScheduler = getScheduler.invoke((Object)entity);
                 Class<?> schedulerType = getScheduler.getReturnType();
                 Consumer<Object> consumer = t -> task.run();
@@ -182,14 +172,13 @@ public final class Scheduler {
 
     /**
      * Like {@link #runEntityTimer(Plugin, Entity, Runnable, long, long)}, but with a callback for
-     * the case where Folia drops the task because the entity is gone (death, chunk unload).
-     * Without it the caller is left sitting on state nobody ever cleans up — on Paper the timer
-     * keeps running and handles that itself, on Folia nobody does.
+     * the case where Folia drops the task because the entity is gone (death, chunk unload). On
+     * Paper the timer keeps running and the caller handles that itself.
      */
     public static TaskHandle runEntityTimer(Plugin plugin, Entity entity, Runnable task, Runnable onRetired, long delayTicks, long periodTicks) {
         if (FOLIA) {
             try {
-                Method getScheduler = Scheduler.cachedMethod(entity.getClass(), "getScheduler", 0);
+                Method getScheduler = Scheduler.cachedMethod(Entity.class, "getScheduler", 0);
                 Object entityScheduler = getScheduler.invoke((Object)entity);
                 Class<?> schedulerType = getScheduler.getReturnType();
                 Consumer<Object> consumer = t -> task.run();
@@ -233,9 +222,7 @@ public final class Scheduler {
             Scheduler.cachedMethod(taskType, "cancel", 0).invoke(handle);
         }
         catch (Exception e) {
-            // Deliberately NOT swallowed: one empty catch clause right here hid the fact that
-            // nothing was being cancelled at all on Folia — every /spooky reload left another full
-            // set of timers running alongside the previous ones.
+            // Logged, not swallowed: a silent failure here leaves timers running after a reload.
             Bukkit.getLogger().warning("[SpookySeason] Could not cancel scheduled task: " + e);
         }
     }
