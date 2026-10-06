@@ -75,6 +75,10 @@ public final class RaidSettings {
     public final Reward consolation;
     public final boolean defeatEffectEnabled;
     public final int defeatEffectSeconds;
+    public final double defenseRadius;
+    public final long killCreditMillis;
+    public final boolean statsAnnounce;
+    public final int statsAnnounceTop;
 
     private final List<RaidMob> mobs = new ArrayList<RaidMob>();
 
@@ -144,6 +148,10 @@ public final class RaidSettings {
         this.consolation = Reward.from(cfg.getConfigurationSection("raid.rewards.consolation"), log);
         this.defeatEffectEnabled = cfg.getBoolean("raid.defeat.effect.enabled", true);
         this.defeatEffectSeconds = Math.max(0, cfg.getInt("raid.defeat.effect.durationSeconds", 20));
+        this.defenseRadius = Math.max(0.0, cfg.getDouble("raid.stats.defenseRadius", 12.0));
+        this.killCreditMillis = Math.max(0L, (long)(cfg.getDouble("raid.stats.killCreditSeconds", 5.0) * 1000.0));
+        this.statsAnnounce = cfg.getBoolean("raid.stats.announce.enabled", false);
+        this.statsAnnounceTop = Math.max(0, cfg.getInt("raid.stats.announce.top", 5));
 
         this.parseMobs(cfg);
     }

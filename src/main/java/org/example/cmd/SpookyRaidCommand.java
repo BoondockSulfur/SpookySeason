@@ -1,6 +1,7 @@
 package org.example.cmd;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.example.SpookySeason;
 import org.bukkit.configuration.ConfigurationSection;
 import org.example.feature.raid.RaidManager;
+import org.example.feature.raid.RaidSummary;
 import org.example.feature.raid.ZoneTarget;
 import org.example.lang.Lang;
 
@@ -25,7 +27,7 @@ import org.example.lang.Lang;
 public class SpookyRaidCommand
 implements CommandExecutor,
 TabCompleter {
-    private static final List<String> SUBS = List.of("start", "stop", "status", "target", "zone");
+    private static final List<String> SUBS = List.of("start", "stop", "status", "stats", "target", "zone");
     private static final List<String> TARGET_SUBS = List.of("info", "mode", "set", "add", "list", "remove", "clear", "region");
     private static final List<String> MODES = List.of("objective", "zone", "region");
     private static final List<String> ZONE_SUBS = List.of("pos1", "pos2", "save", "list", "remove");
@@ -65,6 +67,16 @@ TabCompleter {
             }
             case "status": {
                 for (String line : raid.statusLines()) {
+                    sender.sendMessage(line);
+                }
+                break;
+            }
+            case "stats": {
+                if (args.length > 1 && !args[1].equalsIgnoreCase("last")) {
+                    sender.sendMessage(Lang.get("command.raid.stats-usage", "label", label));
+                    break;
+                }
+                for (String line : RaidSummary.lines(raid.lastResult(), 0)) {
                     sender.sendMessage(line);
                 }
                 break;
@@ -236,13 +248,24 @@ TabCompleter {
                     sender.sendMessage(Lang.get("command.volume.only-ingame", new String[0]));
                     break;
                 }
+                String name = args.length > 2
+                        ? String.join(" ", Arrays.copyOfRange(args, 2, args.length)).trim()
+                        : "";
+                if (name.contains(",")) {
+                    sender.sendMessage(Lang.get("command.raid.target-name-comma", new String[0]));
+                    break;
+                }
                 Location loc = ((Player)sender).getLocation();
                 List<String> points = new ArrayList<String>(plugin.getConfig().getStringList("raid.target.objective.points"));
-                points.add(SpookyRaidCommand.formatPoint(loc));
+                // The health field stays empty so the target follows raid.target.objective.health.
+                points.add(name.isEmpty() ? SpookyRaidCommand.formatPoint(loc) : SpookyRaidCommand.formatPoint(loc) + ",," + name);
                 plugin.getConfig().set("raid.target.objective.points", points);
                 plugin.saveConfig();
                 sender.sendMessage(Lang.get("command.raid.target-added",
                         "index", String.valueOf(points.size()),
+                        "name", name.isEmpty()
+                                ? Lang.get("raid.target-default-name", "index", String.valueOf(points.size()))
+                                : name,
                         "world", loc.getWorld().getName(),
                         "x", String.valueOf(loc.getBlockX()),
                         "y", String.valueOf(loc.getBlockY()),
@@ -346,6 +369,9 @@ TabCompleter {
         }
         if (args.length == 1) {
             return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("stats")) {
+            return "last".startsWith(args[1].toLowerCase(Locale.ROOT)) ? List.of("last") : List.of();
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("target")) {
             return TARGET_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();

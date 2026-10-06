@@ -4,7 +4,7 @@ Halloween event plugin for Paper/Folia **1.21.x and 26.x** — trick-or-treating
 moon nights, the Headless Horseman, an undead raid on a target your players have to defend, bat
 swarms, jumpscares and season-end rewards.
 
-Current version: **1.5.0**
+Current version: **1.6.0**
 
 ## Features
 
@@ -56,10 +56,11 @@ and deliberately excluded from it.
 | `/spookyraid start` | `spooky.admin` | Starts a raid immediately, independently of the season and the calendar window. |
 | `/spookyraid stop` | `spooky.admin` | Aborts a running raid: no victory, no defeat, no rewards. |
 | `/spookyraid status` | `spooky.admin` | State, wave, attackers alive, target integrity, number of defenders. |
+| `/spookyraid stats [last]` | `spooky.admin` | Result table of the last raid: targets and each defender's kills, leader kills, defence kills, damage and deaths. |
 | `/spookyraid target info` | `spooky.admin` | Shows the mode, the objective positions, the zone and the region. |
 | `/spookyraid target mode <objective\|zone\|region>` | `spooky.admin` | Switches between the three kinds of target. |
 | `/spookyraid target set` | `spooky.admin`, in game only | Sets the objective position to where you stand. |
-| `/spookyraid target add` \| `list` \| `remove <n>` \| `clear` | `spooky.admin` | Manages several objectives at once. |
+| `/spookyraid target add [name]` \| `list` \| `remove <n>` \| `clear` | `spooky.admin` | Manages several objectives at once. |
 | `/spookyraid target region <name>` | `spooky.admin`, in game only | Picks a WorldGuard region as the target (has to exist in your own world). |
 | `/spookyraid zone pos1` \| `pos2` | `spooky.admin`, in game only | Marks the two corners of your own zone. |
 | `/spookyraid zone save <name>` | `spooky.admin`, in game only | Saves the zone and selects it as the target. |
@@ -136,13 +137,15 @@ breaches immediately. The plugin warns at start with the minimum distance needed
 
 The `region` mode requires WorldGuard; without it the start is refused with a message.
 
-**Several objectives** go into `raid.target.objective.points` — one line each as `world,x,y,z` or
-`world,x,y,z,health`, all in the same world. While the list is empty, the single point from
+**Several objectives** go into `raid.target.objective.points` — one line each as `world,x,y,z`,
+`world,x,y,z,health` or `world,x,y,z,health,name`, all in the same world. An empty health field
+uses the default health; without a name a target is called "Target 1", "Target 2" and so on. Names
+may contain spaces but no commas. While the list is empty, the single point from
 `world/x/y/z` applies. Easiest in game:
 
 | Command | Effect |
 | --- | --- |
-| `/spookyraid target add` | Adds your own position as another objective |
+| `/spookyraid target add [name]` | Adds your own position as another objective, optionally named |
 | `/spookyraid target list` | Lists all objectives with their number |
 | `/spookyraid target remove <n>` | Removes one |
 | `/spookyraid target clear` | Empties the list, the single point applies again |
@@ -184,9 +187,33 @@ facing many defenders, 900–3000 is a reasonable starting range.
 
 On **victory** every defender receives `raid.rewards.victory`, on **defeat** `raid.rewards.consolation`:
 items (`MATERIAL:amount`) and experience, given through the inventory API. Defenders are everyone
-who was within `participationRadius` of the target during the raid or killed an attacker. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
+who was within `participationRadius` of the target during the raid or hurt or killed an attacker. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
 (particles and darkness, **no** block changes); no new raid can start during that time, and
 `/spookyraid stop` ends it immediately.
+
+### Raid statistics and results
+
+During the fighting the plugin counts per defender: kills, leader kills, damage dealt (the health
+actually taken, not overkill), defence kills (attacker died within `raid.stats.defenseRadius`
+blocks of a standing target, or inside the zone/region) and deaths. A kill goes to the last player
+who hurt the mob within `raid.stats.killCreditSeconds`, including arrows, potions and tamed
+animals. Zone and region targets are named after the zone or region.
+
+Every finished raid is written to `plugins/SpookySeason/raid-results/<endedAtMillis>-<raidId>.json`
+(same content as `RaidResult#toMap()`). The result of the last raid, also from before a restart, is
+shown with `/spookyraid stats`. With `raid.stats.announce.enabled`
+the players around the target also get it in chat when the raid ends (`top` limits the list).
+
+### API for other plugins
+
+Two synchronous Bukkit events in `org.example.api` (Paper: main thread, Folia: global region thread):
+
+- `RaidStartEvent` when the countdown begins: raid id, start time, world, target mode, wave count.
+- `RaidEndEvent` once per raid on victory, defeat or abort, with the same raid id. `getResult()`
+  returns the typed `RaidResult` (outcome, waves reached, targets, per-player statistics);
+  `toMap()` returns it as plain Java types for plugins that read it through reflection.
+
+No end event is fired if the server shuts down during a raid.
 
 ### How the attack works
 

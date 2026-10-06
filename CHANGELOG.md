@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.0
+
+### Added
+- Raid statistics per defender (kills, leader kills, damage, defence kills, deaths), `/spookyraid stats`, optional chat summary (`raid.stats`).
+- API: `RaidStartEvent` and `RaidEndEvent` with the full result in `org.example.api`.
+- Raid results as JSON files in `raid-results/`; named objectives (`/spookyraid target add [name]`).
+
+### Fixed
+- Attackers were pulled away from the target by villagers, golems and animals.
+- The raid leader roamed instead of heading for the target.
+- A leader killed early delayed the end of the wave and logged "never appeared".
+- Citizens NPCs counted as defenders.
+
 ## 1.5.0
 
 ### Added

@@ -214,8 +214,11 @@ raid:
       y: 64.0
       z: 0.5
       # Several targets at once. One line per target:
-      #   "world,x,y,z"  or  "world,x,y,z,health"
-      # Easiest via /spookyraid target add (adds your own position).
+      #   "world,x,y,z"  or  "world,x,y,z,health"  or  "world,x,y,z,health,name"
+      # An empty health field ("world,x,y,z,,name") uses the health below. The name shows up
+      # in /spookyraid stats and in the raid results; it may contain spaces but no commas.
+      # Without a name a target is called "Target 1", "Target 2" and so on.
+      # Easiest via /spookyraid target add [name] (adds your own position).
       # All targets must be in the same world.
       points: []
       # When is the raid lost?
@@ -452,6 +455,22 @@ raid:
       items:
         - BREAD:8
       xp: 0
+
+  # Per-player statistics of each raid: kills, leader kills, damage dealt, kills close to a
+  # target and deaths. The last raid is shown with /spookyraid stats. Each finished raid is
+  # written to raid-results/ as one JSON file, and other plugins receive it through RaidEndEvent.
+  stats:
+    # A kill counts as a defence kill if the attacker died within this many blocks of a
+    # target still standing (zone/region: inside it or this close to its centre).
+    defenseRadius: 12
+    # A mob that dies without a final player blow (lava, fall, burning) is credited to the
+    # last player who hurt it, if that was at most this many seconds before.
+    killCreditSeconds: 5
+    # Post the result in chat to the players around the target when a raid ends.
+    announce:
+      enabled: false
+      # How many defenders to list, best first. 0 lists everyone.
+      top: 5
 
   # On defeat the raid ends by itself: attackers are cleared, the consolation rewards go out,
   # and the place is left marked for a short while - particles and darkness, no block changes.

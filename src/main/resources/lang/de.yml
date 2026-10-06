@@ -53,12 +53,13 @@ command:
     info-loot: "§6§l── Loot ──"
 
   raid:
-    usage: "§7Nutzung: §e/{label} <start|stop|status|target>"
+    usage: "§7Nutzung: §e/{label} <start|stop|status|stats|target|zone>"
     started: "§6Der Überfall wurde gestartet."
     stopped: "§7Der Überfall wurde abgeblasen."
     not-running: "§7Es läuft gerade kein Überfall."
     target-usage: "§7Nutzung: §e/{label} target <info|mode|set|add|list|remove|clear|region>"
-    target-added: "§aZiel #{index} bei §e{world} §b{x}/{y}/{z} §ahinzugefügt."
+    target-added: "§aZiel #{index} §e{name} §abei §e{world} §b{x}/{y}/{z} §ahinzugefügt."
+    target-name-comma: "§cZielnamen dürfen keine Kommas enthalten."
     target-removed: "§aZiel #{index} entfernt."
     target-cleared: "§aAlle Zusatzziele entfernt - es gilt wieder das Einzelziel."
     target-list-header: "§6§l── Ziele ──"
@@ -88,6 +89,19 @@ command:
     target-set: "§aZiel gesetzt auf §e{world} §b{x}/{y}/{z}§a."
     region-usage: "§7Nutzung: §e/{label} target region <name>"
     region-set: "§aZiel-Region auf §e{region} §ain §e{world} §agesetzt."
+    stats-usage: "§7Nutzung: §e/{label} stats [last]"
+    stats-none: "§7Es wurde noch kein Überfall aufgezeichnet."
+    stats-header: "§6§l── Letzter Überfall ──"
+    stats-summary: "§7{time} §7— {outcome} §7— Welle §e{wave}§7/§e{total} §7— §e{minutes} §7Min."
+    stats-outcome-victory: "§aSieg"
+    stats-outcome-defeat: "§cNiederlage"
+    stats-outcome-aborted: "§7Abgebrochen"
+    stats-target: "§7  §e{name}§7: §a{state}"
+    stats-target-fallen: "§7  §e{name}§7: §c{state} §8(gefallen)"
+    stats-target-health: "{health}/{max} LP"
+    stats-target-breaches: "{breaches}/{limit} Durchbrüche"
+    stats-no-players: "§7Keine Verteidiger erfasst."
+    stats-player: "§7#{rank} §e{name} §7— §f{kills} §7Kills, §f{leader} §7Anführer, §f{defense} §7am Ziel, §f{damage} §7Schaden, §f{deaths} §7Tode"
 
 trickortreat:
   cooldown: "§7Du hast hier schon geklingelt. Versuch es später nochmal!"
@@ -105,6 +119,7 @@ boss:
 
 raid:
   objective-name: "Wächterstatue"
+  target-default-name: "Ziel {index}"
   objective-label: "§6§lZiel §7— §a{health}§7/§a{max}"
   objective-label-lost: "§8§lGefallen"
   attacker-name: "Auferstandener"
@@ -138,7 +153,7 @@ raid:
     idle: "§7Es läuft gerade kein Überfall."
     wave: "§7Welle §e{wave}§7/§e{total} §7— §f{alive} am Leben, {pending} noch ausstehend"
     target-objectives: "§7Ziele stehen noch: §a{alive}§7/§a{total}"
-    target-objective: "§7  #{index} §7bei §e{x}/{y}/{z}§7: §b{health}§7/§b{max}"
+    target-objective: "§7  #{index} §e{name} §7bei §e{x}/{y}/{z}§7: §b{health}§7/§b{max}"
     target-region: "§7Region §e{region}§7: §b{breaches}§7/§b{limit} §7Durchbrüche"
     target-zone: "§7Zone §e{zone}§7: §b{breaches}§7/§b{limit} §7Durchbrüche"
     participants: "§7Verteidiger: §e{count}"

@@ -1,6 +1,7 @@
 package org.example.feature.raid;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 import org.example.SpookySeason;
+import org.example.api.RaidResult;
 import org.example.lang.Lang;
 import org.example.util.Attributes;
 import org.example.util.Scheduler;
@@ -58,14 +60,16 @@ public class ObjectiveTarget implements RaidTarget {
     private static final class Objective {
         private final Location anchor;
         private final double maxHealth;
+        private final String name;
         private final DoubleAdder damageTaken = new DoubleAdder();
         private volatile Entity visual;
         private volatile Entity label;
         private volatile boolean announcedLoss;
 
-        private Objective(Location anchor, double maxHealth) {
+        private Objective(Location anchor, double maxHealth, String name) {
             this.anchor = anchor;
             this.maxHealth = maxHealth;
+            this.name = name;
         }
 
         private double health() {
@@ -119,7 +123,7 @@ public class ObjectiveTarget implements RaidTarget {
         World world = null;
         if (!points.isEmpty()) {
             for (String entry : points) {
-                Objective objective = ObjectiveTarget.parsePoint(plugin, entry, defaultHealth);
+                Objective objective = ObjectiveTarget.parsePoint(plugin, entry, defaultHealth, parsed.size() + 1);
                 if (objective == null) continue;
                 if (world == null) {
                     world = objective.anchor.getWorld();
@@ -135,7 +139,8 @@ public class ObjectiveTarget implements RaidTarget {
             world = Bukkit.getWorld(cfg.getString("world", ""));
             if (world != null) {
                 parsed.add(new Objective(new Location(world,
-                        cfg.getDouble("x", 0.5), cfg.getDouble("y", 64.0), cfg.getDouble("z", 0.5)), defaultHealth));
+                        cfg.getDouble("x", 0.5), cfg.getDouble("y", 64.0), cfg.getDouble("z", 0.5)),
+                        defaultHealth, ObjectiveTarget.defaultName(1)));
             }
         }
         if (world == null || parsed.isEmpty()) {
@@ -144,11 +149,15 @@ public class ObjectiveTarget implements RaidTarget {
         return new ObjectiveTarget(plugin, cfg, world, parsed);
     }
 
-    /** Format: {@code world,x,y,z} or {@code world,x,y,z,health}. */
-    private static Objective parsePoint(Plugin plugin, String entry, double defaultHealth) {
+    /**
+     * Format: {@code world,x,y,z}, {@code world,x,y,z,health} or {@code world,x,y,z,health,name}.
+     * An empty health field means the default health; without a name the target is called after
+     * {@code index}.
+     */
+    private static Objective parsePoint(Plugin plugin, String entry, double defaultHealth, int index) {
         String[] parts = entry.split(",");
         if (parts.length < 4) {
-            plugin.getLogger().warning("Raid objective point '" + entry + "' is malformed (expected world,x,y,z[,health]).");
+            plugin.getLogger().warning("Raid objective point '" + entry + "' is malformed (expected world,x,y,z[,health[,name]]).");
             return null;
         }
         World world = Bukkit.getWorld(parts[0].trim());
@@ -161,13 +170,22 @@ public class ObjectiveTarget implements RaidTarget {
                     Double.parseDouble(parts[1].trim()),
                     Double.parseDouble(parts[2].trim()),
                     Double.parseDouble(parts[3].trim()));
-            double health = parts.length > 4 ? Math.max(1.0, Double.parseDouble(parts[4].trim())) : defaultHealth;
-            return new Objective(loc, health);
+            double health = parts.length > 4 && !parts[4].isBlank()
+                    ? Math.max(1.0, Double.parseDouble(parts[4].trim()))
+                    : defaultHealth;
+            String name = parts.length > 5
+                    ? String.join(",", Arrays.copyOfRange(parts, 5, parts.length)).trim()
+                    : "";
+            return new Objective(loc, health, name.isEmpty() ? ObjectiveTarget.defaultName(index) : name);
         }
         catch (NumberFormatException e) {
             plugin.getLogger().warning("Raid objective point '" + entry + "' has non-numeric coordinates.");
             return null;
         }
+    }
+
+    private static String defaultName(int index) {
+        return Lang.get("raid.target-default-name", "index", String.valueOf(index));
     }
 
     private static int parseLoseMode(String value) {
@@ -585,6 +603,7 @@ public class ObjectiveTarget implements RaidTarget {
         for (Objective objective : this.objectives) {
             lines.add(Lang.get("raid.status.target-objective",
                     "index", String.valueOf(index++),
+                    "name", objective.name,
                     "health", String.valueOf((long)Math.ceil(objective.health())),
                     "max", String.valueOf((long)objective.maxHealth),
                     "x", String.valueOf(objective.anchor.getBlockX()),
@@ -592,6 +611,32 @@ public class ObjectiveTarget implements RaidTarget {
                     "z", String.valueOf(objective.anchor.getBlockZ())));
         }
         return lines;
+    }
+
+    @Override
+    public String mode() {
+        return "objective";
+    }
+
+    @Override
+    public List<RaidResult.TargetResult> results() {
+        ArrayList<RaidResult.TargetResult> results = new ArrayList<RaidResult.TargetResult>();
+        for (Objective objective : this.objectives) {
+            results.add(RaidResult.TargetResult.objective(objective.name, objective.destroyed(),
+                    objective.health(), objective.maxHealth));
+        }
+        return results;
+    }
+
+    @Override
+    public boolean defends(Location loc, double radius) {
+        for (Objective objective : this.objectives) {
+            if (objective.destroyed()) continue;
+            if (RaidTarget.within(loc, objective.anchor, radius)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Component legacy(String text) {

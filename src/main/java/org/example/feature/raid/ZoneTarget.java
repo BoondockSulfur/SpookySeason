@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
+import org.example.api.RaidResult;
 import org.example.lang.Lang;
 import org.example.util.Scheduler;
 
@@ -170,6 +171,10 @@ public class ZoneTarget implements RaidTarget {
         return this.breaches.get();
     }
 
+    public int breachLimit() {
+        return this.breachLimit;
+    }
+
     /** Distance from the centre to a corner — how far out the spawn ring has to sit. */
     public double halfDiagonal() {
         double dx = (this.maxX - this.minX) / 2.0;
@@ -235,5 +240,20 @@ public class ZoneTarget implements RaidTarget {
                 "breaches", String.valueOf(this.breaches.get()),
                 "limit", String.valueOf(this.breachLimit)));
         return lines;
+    }
+
+    @Override
+    public String mode() {
+        return "zone";
+    }
+
+    @Override
+    public List<RaidResult.TargetResult> results() {
+        return List.of(RaidResult.TargetResult.breachable(this.name, this.isLost(), this.breaches.get(), this.breachLimit));
+    }
+
+    @Override
+    public boolean defends(Location loc, double radius) {
+        return this.contains(loc) || RaidTarget.within(loc, this.center, radius);
     }
 }

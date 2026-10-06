@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.example.api.RaidResult;
 
 /**
  * The thing a raid is fought over.
@@ -99,4 +100,23 @@ public interface RaidTarget {
 
     /** Lines for {@code /spookyraid status}. */
     List<String> describe();
+
+    /** Mode name as used in {@code raid.target.mode} and in the raid result. */
+    String mode();
+
+    /** Current state of every target, for the raid result. Reads counters only. */
+    List<RaidResult.TargetResult> results();
+
+    /**
+     * Whether {@code loc} lies close to something still worth defending: within {@code radius}
+     * of a standing objective, or inside the zone/region or within {@code radius} of its centre.
+     * Called from the region thread that owns {@code loc}.
+     */
+    boolean defends(Location loc, double radius);
+
+    /** Squared distance check that tolerates a different world or a missing centre. */
+    static boolean within(Location a, Location b, double radius) {
+        return a != null && b != null && a.getWorld() != null && a.getWorld().equals(b.getWorld())
+                && a.distanceSquared(b) <= radius * radius;
+    }
 }

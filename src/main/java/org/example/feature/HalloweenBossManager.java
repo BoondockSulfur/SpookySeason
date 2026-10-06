@@ -190,6 +190,21 @@ implements Listener {
         }
     }
 
+    /** The rider of the boss currently standing in the world, or null. */
+    public UUID bossId() {
+        return this.bossUUID;
+    }
+
+    /** The boss's horse, or null. Hits on it are passed on to the rider's health. */
+    public UUID horseId() {
+        return this.horseUUID;
+    }
+
+    /** The rider of the active boss, or null. Only touch it on the entity's own thread. */
+    public Entity bossEntity() {
+        return this.bossEntity;
+    }
+
     /** True while a tracked boss is standing in the world. */
     public boolean isActive() {
         return this.bossUUID != null;

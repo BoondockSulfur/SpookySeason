@@ -14,6 +14,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.example.SpookySeason;
+import org.example.api.RaidResult;
 import org.example.lang.Lang;
 import org.example.util.Scheduler;
 
@@ -176,5 +177,23 @@ public class RegionTarget implements RaidTarget {
                 "breaches", String.valueOf(this.breaches.get()),
                 "limit", String.valueOf(this.breachLimit)));
         return lines;
+    }
+
+    @Override
+    public String mode() {
+        return "region";
+    }
+
+    @Override
+    public List<RaidResult.TargetResult> results() {
+        return List.of(RaidResult.TargetResult.breachable(this.regionName, this.isLost(), this.breaches.get(), this.breachLimit));
+    }
+
+    @Override
+    public boolean defends(Location loc, double radius) {
+        if (RaidTarget.within(loc, this.center, radius)) {
+            return true;
+        }
+        return this.ready && SpookySeason.get().regions().isInRegion(loc, this.regionName);
     }
 }

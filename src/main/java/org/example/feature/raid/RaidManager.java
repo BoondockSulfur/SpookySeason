@@ -16,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -47,6 +48,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Tameable;
 import org.bukkit.entity.Wither;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -57,6 +59,8 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -67,6 +71,10 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 import org.example.SpookySeason;
+import org.example.api.RaidEndEvent;
+import org.example.api.RaidStartEvent;
+import org.example.api.RaidResult;
+import org.example.feature.HalloweenBossManager;
 import org.example.lang.Lang;
 import org.example.util.Attributes;
 import org.example.util.Reward;
@@ -102,6 +110,13 @@ public class RaidManager implements Listener {
     private static final int LEADER_GRACE_SECONDS = 15;
     /** How far below the surface a spawn point may be looked for, in blocks. */
     private static final int SURFACE_SEARCH_DEPTH = 6;
+    /**
+     * Leader health pool before the boss manager processes a hit; read again at MONITOR to learn
+     * how much the hit actually took. Events for one entity are handled on one thread.
+     */
+    private static final ThreadLocal<Double> LEADER_POOL_BEFORE = new ThreadLocal<Double>();
+    /** Player behind a hit on the leader's horse, which reaches the rider as sourceless damage. */
+    private static final ThreadLocal<Player> HORSE_ATTACKER = new ThreadLocal<Player>();
 
     private final Plugin plugin;
     private Scheduler.TaskHandle tickTask;
@@ -115,6 +130,15 @@ public class RaidManager implements Listener {
     private final List<Entity> attackers = new CopyOnWriteArrayList<Entity>();
     private final Set<UUID> attackerIds = ConcurrentHashMap.newKeySet();
     private final Set<UUID> participants = ConcurrentHashMap.newKeySet();
+    private final RaidStats stats = new RaidStats();
+    private final RaidResultStore resultStore;
+    private final AtomicReference<RaidResult> lastResult = new AtomicReference<RaidResult>();
+    // Set when a raid starts and cleared once its result has been published, so it goes out once.
+    private volatile UUID raidId;
+    private volatile long startedAt;
+    // The boss acting as this raid's leader, remembered on its first hit: the boss manager
+    // forgets it in its own death handler before ours may run.
+    private volatile UUID leaderId;
     private final AtomicInteger remainingSpawns = new AtomicInteger();
     private final AtomicInteger spawnsInFlight = new AtomicInteger();
     private final AtomicInteger spawnAttempts = new AtomicInteger();
@@ -138,7 +162,7 @@ public class RaidManager implements Listener {
     private int aftermathSeconds;
     private Location aftermathCenter;
 
-    private boolean leaderRequested;
+    private volatile boolean leaderRequested;
     private boolean leaderSeen;
     private int leaderGrace;
 
@@ -162,6 +186,13 @@ public class RaidManager implements Listener {
         File stateFile = new File(plugin.getDataFolder(), "raid-state.yml");
         this.stateCfg = YamlConfiguration.loadConfiguration(stateFile);
         this.stateSaver = new YamlSaver(plugin, stateFile, this::snapshotState);
+        this.resultStore = new RaidResultStore(plugin);
+        Scheduler.runAsync(plugin, () -> {
+            RaidResult stored = this.resultStore.loadLatest();
+            if (stored != null) {
+                this.lastResult.compareAndSet(null, stored);
+            }
+        });
     }
 
     // ── Lebenszyklus ────────────────────────────────────────────────────────
@@ -198,6 +229,11 @@ public class RaidManager implements Listener {
 
     public int currentWave() {
         return this.waveIndex;
+    }
+
+    /** The most recent finished raid, also from before a restart; null if none was recorded. */
+    public RaidResult lastResult() {
+        return this.lastResult.get();
     }
 
     /** Does this entity belong to a running raid? Shields it from the entity cleanup. */
@@ -259,6 +295,10 @@ public class RaidManager implements Listener {
         this.fogTicker = 0;
         this.aftermathCenter = null;
         this.participants.clear();
+        this.stats.reset();
+        this.leaderId = null;
+        this.raidId = UUID.randomUUID();
+        this.startedAt = System.currentTimeMillis();
         this.attackerIds.clear();
         this.attackers.clear();
         this.remainingSpawns.set(0);
@@ -284,6 +324,9 @@ public class RaidManager implements Listener {
                     + " - some archetypes will not appear. Raise baseMobs/mobsPerWave or lower minPerWave.");
         }
         this.state = State.COUNTDOWN;
+        RaidStartEvent startEvent = new RaidStartEvent(this.raidId, this.startedAt, newTarget.world().getName(),
+                newTarget.mode(), cfgSnapshot.waveCount);
+        Scheduler.runLater(this.plugin, () -> Bukkit.getPluginManager().callEvent(startEvent), 1L);
         this.broadcast("raid.announce", "seconds", String.valueOf(cfgSnapshot.countdownSeconds));
         this.showTitle("raid.title.incoming", "raid.subtitle.incoming", Sound.ENTITY_WITHER_SPAWN, 0.7f);
         return null;
@@ -294,6 +337,9 @@ public class RaidManager implements Listener {
         if (this.state == State.IDLE) {
             return;
         }
+        // Every RaidStartEvent gets its RaidEndEvent, also for an abort during the countdown.
+        // After a defeat the result is already out and this does nothing.
+        this.publishResult(RaidResult.Outcome.ABORTED);
         if (announce) {
             this.broadcast("raid.aborted", new String[0]);
         }
@@ -505,6 +551,11 @@ public class RaidManager implements Listener {
     }
 
     private boolean waveComplete() {
+        // Observed every second: a leader killed while attackers are still standing would
+        // otherwise never count as seen, and the wave would wait out the spawn grace for it.
+        if (this.leaderRequested && SpookySeason.get().boss() != null && SpookySeason.get().boss().isActive()) {
+            this.leaderSeen = true;
+        }
         if (this.remainingSpawns.get() > 0 || this.spawnsInFlight.get() > 0) {
             return false;
         }
@@ -795,6 +846,7 @@ public class RaidManager implements Listener {
             if (a.isValid() && !a.isDead()) continue;
             this.attackers.remove(a);
             this.attackerIds.remove(a.getUniqueId());
+            this.stats.forget(a.getUniqueId());
         }
     }
 
@@ -886,6 +938,62 @@ public class RaidManager implements Listener {
                 }
             });
         }
+        this.steerLeader(cfg, current, retargetNow, aggroSquared);
+    }
+
+    /**
+     * Sends the raid leader towards the target like the other attackers. The boss brings its own
+     * AI and would otherwise roam the area. The rider controls the horse, so the path is set on
+     * both and a push goes to whatever carries the rider.
+     */
+    private void steerLeader(RaidSettings cfg, RaidTarget current, boolean retargetNow, double aggroSquared) {
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        if (!this.leaderRequested || boss == null) {
+            return;
+        }
+        if (!(boss.bossEntity() instanceof Mob rider)) {
+            return;
+        }
+        Scheduler.runOnEntity(this.plugin, rider, () -> {
+            if (!rider.isValid() || rider.isDead()) {
+                return;
+            }
+            Location from = rider.getLocation();
+            if (current.holdsPosition(from, false, cfg.rangedReach)) {
+                return;
+            }
+            Location nav = current.navTarget(from);
+            Mob carrier = rider.getVehicle() instanceof Mob vehicle ? vehicle : rider;
+            this.unstick(cfg, carrier, carrier.getLocation(), nav);
+            if (!retargetNow || nav == null) {
+                return;
+            }
+            LivingEntity currentTarget = rider.getTarget();
+            if (currentTarget != null && (!currentTarget.isValid() || currentTarget.isDead()
+                    || !this.keepsTarget(cfg, currentTarget, from, aggroSquared))) {
+                rider.setTarget(null);
+                currentTarget = null;
+            }
+            if (currentTarget != null) {
+                return;
+            }
+            LivingEntity attackTarget = current.attackTarget(from);
+            if (attackTarget != null) {
+                rider.setTarget(attackTarget);
+            }
+            if (rider.getTarget() == null) {
+                rider.getPathfinder().moveTo(nav, 1.1);
+                if (carrier != rider) {
+                    carrier.getPathfinder().moveTo(nav, 1.1);
+                }
+            }
+            if (cfg.debug) {
+                this.plugin.getLogger().info("[raid-debug] LEADER at " + from.getBlockX() + "/" + from.getBlockY()
+                        + "/" + from.getBlockZ() + " dist=" + String.format("%.1f", from.distance(nav))
+                        + " target=" + (rider.getTarget() == null ? "none" : rider.getTarget().getType().toString())
+                        + " pathing=" + carrier.getPathfinder().hasPath());
+            }
+        });
     }
 
     /**
@@ -955,6 +1063,7 @@ public class RaidManager implements Listener {
 
     private void victory() {
         RaidSettings cfg = this.settings;
+        this.publishResult(RaidResult.Outcome.VICTORY);
         this.broadcast("raid.victory", "waves", String.valueOf(this.waveIndex));
         this.showTitle("raid.title.victory", "raid.subtitle.victory", Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f);
         this.clearAttackers();
@@ -973,6 +1082,7 @@ public class RaidManager implements Listener {
     private void defeat() {
         RaidSettings cfg = this.settings;
         RaidTarget current = this.target;
+        this.publishResult(RaidResult.Outcome.DEFEAT);
         this.aftermathCenter = current == null ? null : current.center();
         this.broadcast("raid.defeat", "wave", String.valueOf(this.waveIndex));
         this.showTitle("raid.title.defeat", "raid.subtitle.defeat", Sound.ENTITY_WITHER_DEATH, 0.8f);
@@ -1009,8 +1119,54 @@ public class RaidManager implements Listener {
         this.aftermathCenter = null;
         this.leaderRequested = false;
         this.leaderSeen = false;
+        this.leaderId = null;
+        this.raidId = null;
         this.participants.clear();
+        this.stats.reset();
         this.hideBars();
+    }
+
+    /**
+     * Freezes the raid's result and hands it out: kept for {@code /spookyraid stats}, written to
+     * {@code raid-results/} off-thread, announced through {@link RaidEndEvent} on the global thread
+     * and, if enabled, summarised in chat for the players around the target. Runs at most once per raid.
+     */
+    private void publishResult(RaidResult.Outcome outcome) {
+        RaidTarget current = this.target;
+        RaidSettings cfg = this.settings;
+        UUID id = this.raidId;
+        if (current == null || cfg == null || id == null || current.world() == null) {
+            return;
+        }
+        this.raidId = null;
+        RaidResult result = new RaidResult(id, this.startedAt, System.currentTimeMillis(),
+                current.world().getName(), outcome, cfg.waveCount, this.waveIndex, current.mode(),
+                current.results(), this.stats.results(this.participants));
+        this.lastResult.set(result);
+        if (!this.plugin.isEnabled()) {
+            // Shutting down: the schedulers refuse new tasks, so the file is written right here
+            // and no event goes out.
+            this.resultStore.write(result);
+            return;
+        }
+        Scheduler.runAsync(this.plugin, () -> this.resultStore.write(result));
+        List<Player> audience = cfg.statsAnnounce && this.waveIndex > 0 && current.center() != null
+                ? this.nearbyPlayers(current.center(), cfg.announceRadius)
+                : List.of();
+        // One tick later, so the summary follows the victory or defeat message instead of preceding it.
+        Scheduler.runLater(this.plugin, () -> {
+            Bukkit.getPluginManager().callEvent(new RaidEndEvent(result));
+            if (audience.isEmpty()) {
+                return;
+            }
+            List<String> lines = RaidSummary.lines(result, cfg.statsAnnounceTop);
+            for (Player p : audience) {
+                if (!p.isOnline()) continue;
+                for (String line : lines) {
+                    p.sendMessage(line);
+                }
+            }
+        }, 1L);
     }
 
     /** Hands the reward to every defender who is online; items go through the inventory API. */
@@ -1132,6 +1288,7 @@ public class RaidManager implements Listener {
         }
         for (Player p : this.nearbyPlayers(center, cfg.participationRadius)) {
             this.participants.add(p.getUniqueId());
+            this.stats.tally(p.getUniqueId(), p.getName());
         }
     }
 
@@ -1142,10 +1299,15 @@ public class RaidManager implements Listener {
         }
         double radiusSquared = radius * radius;
         for (Player p : center.getWorld().getPlayers()) {
-            if (p.getLocation().distanceSquared(center) > radiusSquared) continue;
+            if (RaidManager.isNpc(p) || p.getLocation().distanceSquared(center) > radiusSquared) continue;
             result.add(p);
         }
         return result;
+    }
+
+    /** NPC plugins such as Citizens spawn player entities; they are no defenders. */
+    private static boolean isNpc(Entity entity) {
+        return entity.hasMetadata("NPC");
     }
 
     private Location announceAnchor() {
@@ -1336,6 +1498,38 @@ public class RaidManager implements Listener {
     }
 
     /**
+     * With {@code focus: target}, attackers and the leader only pick defenders in their way or
+     * the target itself. Vanilla AI re-acquires villagers, golems and animals within a few ticks,
+     * so dropping such a target on the retarget interval alone leaves the mob torn between both.
+     */
+    @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
+    public void onAttackerTarget(EntityTargetLivingEntityEvent e) {
+        RaidSettings cfg = this.settings;
+        RaidTarget current = this.target;
+        LivingEntity wanted = e.getTarget();
+        if (cfg == null || current == null || !cfg.focusTarget || wanted == null) {
+            return;
+        }
+        UUID id = e.getEntity().getUniqueId();
+        if (!this.attackerIds.contains(id) && !this.isLeader(id)) {
+            return;
+        }
+        if (current.isTracked(wanted.getUniqueId())) {
+            return;
+        }
+        if (wanted instanceof Player && !RaidManager.isNpc(wanted) && this.keepsTarget(cfg, wanted,
+                e.getEntity().getLocation(), cfg.playerAggroRange * cfg.playerAggroRange)) {
+            return;
+        }
+        e.setCancelled(true);
+    }
+
+    private boolean isLeader(UUID id) {
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        return this.leaderRequested && boss != null && id.equals(boss.bossId());
+    }
+
+    /**
      * Attackers do not fight each other. A stray arrow would otherwise make a zombie turn on the
      * skeleton that hit it. The damager is resolved through projectiles so wither skulls count too.
      */
@@ -1430,10 +1624,158 @@ public class RaidManager implements Listener {
             e.getDrops().clear();
             e.setDroppedExp(0);
         }
-        Player killer = e.getEntity().getKiller();
-        if (killer != null) {
-            this.participants.add(killer.getUniqueId());
+        this.creditKill(e, false);
+    }
+
+    /** The leader is the boss, not one of the attackers; its kill is counted separately. */
+    @EventHandler
+    public void onLeaderDeath(EntityDeathEvent e) {
+        UUID id = e.getEntity().getUniqueId();
+        if (!id.equals(this.leaderId)) {
+            return;
         }
+        this.leaderId = null;
+        this.creditKill(e, true);
+    }
+
+    // ── Statistics ──────────────────────────────────────────────────────────
+
+    /** Statistics only cover the fighting itself, not the countdown or the aftermath. */
+    private boolean recording() {
+        State current = this.state;
+        return current == State.WAVE || current == State.BREAK;
+    }
+
+    /**
+     * Gives the kill to the last player who hurt the mob within {@code killCreditSeconds}, so a
+     * mob that is knocked into lava or shot and then burns to death still counts for them.
+     */
+    private void creditKill(EntityDeathEvent e, boolean leader) {
+        UUID mob = e.getEntity().getUniqueId();
+        RaidSettings cfg = this.settings;
+        if (cfg == null || !this.recording()) {
+            this.stats.forget(mob);
+            return;
+        }
+        RaidStats.Hit hit = this.stats.claimKill(mob, cfg.killCreditMillis);
+        if (hit == null) {
+            return;
+        }
+        RaidTarget current = this.target;
+        boolean defense = current != null && current.defends(e.getEntity().getLocation(), cfg.defenseRadius);
+        this.stats.tally(hit.player(), hit.name()).addKill(leader, defense);
+        this.participants.add(hit.player());
+    }
+
+    /** Before the boss manager touches the leader's pool, and the attacker behind a horse hit. */
+    @EventHandler(priority=EventPriority.LOWEST)
+    public void onLeaderDamagePre(EntityDamageEvent e) {
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        if (boss == null || !this.leaderRequested || !this.recording()) {
+            return;
+        }
+        UUID id = e.getEntity().getUniqueId();
+        if (id.equals(boss.bossId())) {
+            LEADER_POOL_BEFORE.set(boss.healthPool());
+        } else if (id.equals(boss.horseId())) {
+            Player attacker = RaidManager.responsiblePlayer(e);
+            if (attacker != null) {
+                HORSE_ATTACKER.set(attacker);
+            }
+        }
+    }
+
+    /**
+     * Damage dealt by players to raid mobs, counted as the health actually taken rather than the
+     * nominal hit. Not filtered on cancellation because the boss manager cancels hits on the
+     * leader while its pool still has reserves; for the leader the pool difference counts.
+     */
+    @EventHandler(priority=EventPriority.MONITOR)
+    public void onRaidMobDamaged(EntityDamageEvent e) {
+        Entity victim = e.getEntity();
+        UUID id = victim.getUniqueId();
+        Double poolBefore = LEADER_POOL_BEFORE.get();
+        if (poolBefore != null) {
+            LEADER_POOL_BEFORE.remove();
+            this.recordLeaderDamage(e, id, poolBefore);
+            return;
+        }
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        if (boss != null && id.equals(boss.horseId())) {
+            HORSE_ATTACKER.remove();
+            return;
+        }
+        if (e.isCancelled() || !this.recording() || !this.attackerIds.contains(id)
+                || !(victim instanceof LivingEntity)) {
+            return;
+        }
+        Player attacker = RaidManager.responsiblePlayer(e);
+        if (attacker == null) {
+            return;
+        }
+        double taken = Math.min(Math.max(0.0, e.getFinalDamage()), Math.max(0.0, ((LivingEntity)victim).getHealth()));
+        this.recordDamage(id, attacker, taken);
+    }
+
+    private void recordLeaderDamage(EntityDamageEvent e, UUID id, double poolBefore) {
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        if (boss == null || !id.equals(boss.bossId())) {
+            return;
+        }
+        Player attacker = RaidManager.responsiblePlayer(e);
+        if (attacker == null) {
+            attacker = HORSE_ATTACKER.get();
+        }
+        if (attacker == null) {
+            return;
+        }
+        double taken = Math.max(0.0, poolBefore - boss.healthPool());
+        if (taken <= 0.0 && e.isCancelled()) {
+            // Blocked before it reached the pool (protection plugin, invulnerability).
+            return;
+        }
+        this.leaderId = id;
+        this.recordDamage(id, attacker, taken);
+    }
+
+    private void recordDamage(UUID mob, Player attacker, double taken) {
+        UUID player = attacker.getUniqueId();
+        String name = attacker.getName();
+        this.stats.recordHit(mob, player, name);
+        this.stats.tally(player, name).addDamage(taken);
+        this.participants.add(player);
+    }
+
+    /** Deaths of defenders while the fighting lasts. */
+    @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
+    public void onDefenderDeath(PlayerDeathEvent e) {
+        if (!this.recording()) {
+            return;
+        }
+        Player player = e.getEntity();
+        if (!this.participants.contains(player.getUniqueId())) {
+            return;
+        }
+        this.stats.tally(player.getUniqueId(), player.getName()).addDeath();
+    }
+
+    /**
+     * The player responsible for this damage: the causing entity of the damage source (covers
+     * arrows, tridents and thrown potions), or the owner of a tamed animal that struck.
+     */
+    private static Player responsiblePlayer(EntityDamageEvent e) {
+        Entity causing = e.getDamageSource().getCausingEntity();
+        if (causing == null && e instanceof EntityDamageByEntityEvent) {
+            causing = RaidManager.resolveSource(((EntityDamageByEntityEvent)e).getDamager());
+        }
+        if (causing instanceof Player) {
+            return RaidManager.isNpc(causing) ? null : (Player)causing;
+        }
+        if (causing instanceof Tameable && ((Tameable)causing).getOwner() instanceof Player) {
+            Player owner = (Player)((Tameable)causing).getOwner();
+            return RaidManager.isNpc(owner) ? null : owner;
+        }
+        return null;
     }
 
 }
