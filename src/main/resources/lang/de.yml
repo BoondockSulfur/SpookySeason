@@ -22,6 +22,10 @@ command:
     usage: "§7Nutzung: §e/{label} <start|stop>"
     started: "§6Kürbisregen gestartet!"
     stopped: "§6Kürbisregen gestoppt."
+  bloodrain:
+    usage: "§7Nutzung: §e/{label} <start|stop>"
+    started: "§4Blutregen gestartet!"
+    stopped: "§4Blutregen gestoppt."
   volume:
     only-ingame: "Nur ingame nutzbar."
     usage: "§7Nutzung: §e/{label} <ambient|ghost|rain|reset> [0.0-1.0]"
@@ -204,3 +208,7 @@ gui:
 
 plugin:
   enabled: "SpookySeason aktiviert – Happy Halloween!"
+
+bloodrain:
+  begins: "§4§oDer Himmel beginnt zu bluten …"
+  ends: "§7Der Blutregen lässt nach."

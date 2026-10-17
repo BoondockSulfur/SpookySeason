@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.example.cmd.BloodRainCommand;
 import org.example.cmd.PumpkinRainCommand;
 import org.example.cmd.SpookyBossCommand;
 import org.example.cmd.SpookyRaidCommand;
@@ -24,6 +25,7 @@ import org.example.cmd.SpookyVolumeCommand;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.example.feature.BatSwarmManager;
+import org.example.feature.BloodRainManager;
 import org.example.feature.EntityCleanupListener;
 import org.example.feature.GhostListener;
 import org.example.feature.HalloweenBossManager;
@@ -59,6 +61,7 @@ extends JavaPlugin {
     private NamespacedKey raidMarker;
     private HauntedNightManager hauntedNightManager;
     private PumpkinRainManager pumpkinRainManager;
+    private BloodRainManager bloodRainManager;
     private HalloweenBossManager bossManager;
     private BatSwarmManager batSwarmManager;
     private SeasonRewardManager rewardManager;
@@ -111,6 +114,10 @@ extends JavaPlugin {
         return this.pumpkinRainManager;
     }
 
+    public BloodRainManager bloodRain() {
+        return this.bloodRainManager;
+    }
+
     public HalloweenBossManager boss() {
         return this.bossManager;
     }
@@ -143,6 +150,7 @@ extends JavaPlugin {
         this.prefs = new PlayerPrefs((Plugin)this);
         this.stats = new PlayerStats((Plugin)this);
         this.pumpkinRainManager = new PumpkinRainManager((Plugin)this);
+        this.bloodRainManager = new BloodRainManager((Plugin)this);
         this.hauntedNightManager = new HauntedNightManager((Plugin)this);
         this.bossManager = new HalloweenBossManager((Plugin)this);
         this.batSwarmManager = new BatSwarmManager((Plugin)this);
@@ -150,6 +158,7 @@ extends JavaPlugin {
         this.menuGUI = new SpookyMenuGUI();
         this.raidManager = new RaidManager((Plugin)this);
         this.registerCommand("pumpkinrain", new PumpkinRainCommand(this.pumpkinRainManager));
+        this.registerCommand("bloodrain", new BloodRainCommand(this.bloodRainManager));
         this.registerCommand("spooky", new SpookyToggleCommand());
         this.registerCommand("spookyvolume", new SpookyVolumeCommand());
         this.registerCommand("spookyboss", new SpookyBossCommand());
@@ -168,6 +177,7 @@ extends JavaPlugin {
         this.batSwarmManager.start();
         this.rewardManager.start();
         this.raidManager.start();
+        this.bloodRainManager.startTicker();
         Metrics metrics = new Metrics((Plugin)this, 30933);
         metrics.addCustomChart(new SimplePie("language", () -> this.getConfig().getString("language", "en")));
         metrics.addCustomChart(new SimplePie("season_active", () -> this.isSeasonActive() ? "active" : "inactive"));
@@ -187,6 +197,7 @@ extends JavaPlugin {
         // Folia) must not abort the rest of the cleanup.
         this.safeStop(this.hauntedNightManager == null ? null : this.hauntedNightManager::stop, "hauntedNight");
         this.safeStop(this.pumpkinRainManager == null ? null : this.pumpkinRainManager::stop, "pumpkinRain");
+        this.safeStop(this.bloodRainManager == null ? null : this.bloodRainManager::shutdown, "bloodRain");
         this.safeStop(this.bossManager == null ? null : this.bossManager::stop, "boss");
         this.safeStop(this.batSwarmManager == null ? null : this.batSwarmManager::stop, "batSwarm");
         this.safeStop(this.rewardManager == null ? null : this.rewardManager::stop, "rewards");
@@ -217,6 +228,9 @@ extends JavaPlugin {
         }
         if (this.pumpkinRainManager != null) {
             this.pumpkinRainManager.stop();
+        }
+        if (this.bloodRainManager != null) {
+            this.bloodRainManager.shutdown();
         }
         if (this.bossManager != null) {
             this.bossManager.stop();
@@ -264,6 +278,9 @@ extends JavaPlugin {
         if (this.raidManager != null) {
             this.raidManager.start();
         }
+        if (this.bloodRainManager != null) {
+            this.bloodRainManager.startTicker();
+        }
     }
 
     public void reload() {
@@ -276,6 +293,7 @@ extends JavaPlugin {
         // Deliberately only the ticker: a running raid carries on with its frozen configuration
         // snapshot and is not torn down by a reload.
         this.raidManager.start();
+        this.bloodRainManager.startTicker();
     }
 
     private void mergeConfig() {

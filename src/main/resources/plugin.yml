@@ -1,10 +1,10 @@
 name: SpookySeason
-version: 1.6.1
+version: 1.7.0
 main: org.example.SpookySeason
 api-version: '1.21'
 folia-supported: true
 authors: [ "BoondockSulfur" ]
-description: Halloween event plugin – Trick-or-Treat, pumpkin rain, haunted nights, boss fights and more.
+description: Halloween event plugin – Trick-or-Treat, pumpkin rain, blood rain, haunted nights, boss fights and more.
 
 softdepend:
   - WorldGuard
@@ -17,6 +17,10 @@ commands:
     description: Starts/stops the pumpkin rain.
     usage: /pumpkinrain <start|stop>
     permission: spooky.pumpkinrain
+  bloodrain:
+    description: Starts/stops the blood rain.
+    usage: /bloodrain <start|stop>
+    permission: spooky.bloodrain
   spooky:
     description: Halloween features – toggle, reload, opt-out, leaderboard.
     usage: /spooky <on|off|status|reload|rewards|spawn|optout|top|menu>
@@ -34,6 +38,8 @@ commands:
 
 permissions:
   spooky.pumpkinrain:
+    default: op
+  spooky.bloodrain:
     default: op
   spooky.admin:
     default: op

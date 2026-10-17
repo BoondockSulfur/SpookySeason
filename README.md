@@ -1,10 +1,10 @@
 # SpookySeason
 
 Halloween event plugin for Paper/Folia **1.21.x and 26.x** — trick-or-treating, pumpkin rain, blood
-moon nights, the Headless Horseman, an undead raid on a target your players have to defend, bat
+rain, blood moon nights, the Headless Horseman, an undead raid on a target your players have to defend, bat
 swarms, jumpscares and season-end rewards.
 
-Current version: **1.6.1**
+Current version: **1.7.0**
 
 ## Features
 
@@ -14,6 +14,7 @@ Current version: **1.6.1**
 | **Blood moon night** | At night (world time 13000–23000): bossbar, ambient sound, soul particles, ghosts (vex) | `hauntedNight` |
 | **Fog** | A short darkness pulse during the blood moon | `fog` |
 | **Pumpkin rain** | Manually via `/pumpkinrain start` | `pumpkinRain` |
+| **Blood rain** | Via `/bloodrain start`, or by chance in a blood moon night: red drops, optional real rain for the affected players, stronger undead | `bloodRain` |
 | **Headless Horseman** | At night near a random player, or as the leader of a raid wave; skeleton horse and wither skeleton share one health pool | `halloweenBoss` |
 | **Bat swarms** | At night around random players | `batSwarm` |
 | **Jumpscares** | Breaking blocks in the dark | `jumpScare` |
@@ -46,6 +47,7 @@ and deliberately excluded from it.
 | `/spookyvolume <ambient\|ghost\|rain> <0.0–1.0>` | everyone, in game only | Personal volume per sound type. |
 | `/spookyvolume reset` | everyone, in game only | Resets **all** of your own settings, opt-out included. |
 | `/pumpkinrain <start\|stop>` | `spooky.pumpkinrain` | Starts/stops the pumpkin rain. `start` runs **independently** of the season and of `pumpkinRain.enabled`. |
+| `/bloodrain <start\|stop>` | `spooky.bloodrain` | Starts/stops the blood rain in every enabled world. `start` runs **independently** of the season and of `bloodRain.enabled`. |
 | `/spookyboss spawn` | `spooky.admin`, in game only | Same as `/spooky spawn boss`. |
 | `/spookyboss remove` | `spooky.admin` | Removes the active boss. |
 | `/spookyboss info` | `spooky.admin` | Shows the full boss configuration and its current health pool. |
@@ -72,6 +74,7 @@ and deliberately excluded from it.
 | --- | --- | --- |
 | `spooky.admin` | `op` | All admin subcommands of `/spooky`, plus `/spookyboss` and `/spookyraid` in full |
 | `spooky.pumpkinrain` | `op` | `/pumpkinrain` |
+| `spooky.bloodrain` | `op` | `/bloodrain` |
 
 `/spookyvolume` and the player subcommands of `/spooky` (`optout`, `top`, `menu`) need no
 permission.
@@ -104,6 +107,21 @@ active to inactive — not on a manual `/spooky off`. Two consequences:
 
 **New config keys** are added on every start without overwriting existing values or comments;
 keys of removed features are cleaned up.
+
+### Blood rain
+
+Vanilla rain cannot be coloured without a resource pack, so the blood rain is made of particles
+that only the affected player sees (opted-out players stay dry). It runs via `/bloodrain start` in
+every enabled world, or on its own with `bloodMoonChance` once per blood moon night — then only
+where it is night, and it ends with the night.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `style` | `dripstone` | `dripstone` = real drop shapes, `drops` = fragments of `block` falling with gravity, `streaks` = thin dark red threads. Several can be combined: `dripstone,streaks`. |
+| `block` | `NETHER_WART_BLOCK` | Block for the `drops` style and the splashes on the ground. |
+| `intensity` | `14` | Drops per player and pulse. |
+| `playerWeather` | `false` | Real rain and a dark sky for the affected players only. |
+| `undead.enabled` | `true` | The undead nearby get Strength (`strengthAmplifier`, `radius`); raid attackers and the Horseman are left out. |
 
 ### The undead raid
 

@@ -1,8 +1,9 @@
 # Changelog
 
-## 1.6.1
+## 1.7.0
 
 ### Added
+- Blood rain (`/bloodrain`, `bloodRain`): particle drops around every player in three combinable styles, optional real rain for just those players, stronger undead nearby; also by chance in blood moon nights.
 - The raid leader phases through obstacles towards the target when stuck (`raid.waves.leaderPhaseSeconds`, `leaderPhaseDistance`).
 
 ### Fixed

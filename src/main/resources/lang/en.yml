@@ -22,6 +22,10 @@ command:
     usage: "§7Usage: §e/{label} <start|stop>"
     started: "§6Pumpkin rain started!"
     stopped: "§6Pumpkin rain stopped."
+  bloodrain:
+    usage: "§7Usage: §e/{label} <start|stop>"
+    started: "§4Blood rain started!"
+    stopped: "§4Blood rain stopped."
   volume:
     only-ingame: "Only usable in-game."
     usage: "§7Usage: §e/{label} <ambient|ghost|rain|reset> [0.0-1.0]"
@@ -204,3 +208,7 @@ gui:
 
 plugin:
   enabled: "SpookySeason enabled – Happy Halloween!"
+
+bloodrain:
+  begins: "§4§oThe sky begins to bleed …"
+  ends: "§7The blood rain fades."

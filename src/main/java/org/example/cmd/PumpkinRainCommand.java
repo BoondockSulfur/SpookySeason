@@ -1,7 +1,7 @@
 package org.example.cmd;
 
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;

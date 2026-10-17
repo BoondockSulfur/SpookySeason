@@ -80,6 +80,39 @@ pumpkinRain:
   maxDurationSeconds: 60
   volume: 0.6
 
+# ── Blood Rain ─────────────────────────────────────────────
+# Red drops falling around every player (particles - vanilla rain cannot be coloured without a
+# resource pack). /bloodrain start runs it in every enabled world; on its own it comes with
+# bloodMoonChance once per blood moon night, only where it is night, and ends with the night.
+bloodRain:
+  enabled: true
+  # Chance per blood moon night. 0 = only by command.
+  bloodMoonChance: 0.25
+  # How the drops look:
+  #   dripstone = real drop shapes (falling dripstone drips, reddish orange) (default)
+  #   drops     = fragments of "block" falling with gravity
+  #   streaks   = thin dark red vertical threads
+  # Several can be combined, comma-separated, e.g. "dripstone,streaks".
+  style: dripstone
+  # Block whose fragments form the "drops" style and the splashes on the ground.
+  block: NETHER_WART_BLOCK
+  spawnRadius: 12
+  # Drops per player and pulse.
+  intensity: 14
+  tickPeriod: 4
+  maxDurationSeconds: 90
+  # Heartbeat and, without playerWeather, the rain sound. Players' /spookyvolume rain applies.
+  volume: 0.5
+  # Real (vanilla, blue) rain and a dark sky for the players under the blood rain only.
+  playerWeather: false
+  # The undead around players grow stronger while it lasts. Raid attackers and the Headless
+  # Horseman are left out - their strength is balanced separately.
+  undead:
+    enabled: true
+    # 0 = Strength I, 1 = Strength II, ...
+    strengthAmplifier: 0
+    radius: 24
+
 # ── Jump Scares ────────────────────────────────────────────
 # Triggers when breaking blocks in dark areas.
 jumpScare:
