@@ -39,10 +39,11 @@ public class PumpkinRainManager {
             return;
         }
         this.stop();
-        final int period = this.plugin.getConfig().getInt("pumpkinRain.tickPeriod", 10);
-        int durationS = this.plugin.getConfig().getInt("pumpkinRain.maxDurationSeconds", 60);
-        final int radius = this.plugin.getConfig().getInt("pumpkinRain.spawnRadius", 10);
-        final int intensity = this.plugin.getConfig().getInt("pumpkinRain.intensity", 5);
+        // A period of 0 would never advance the tick counter and the rain would never end.
+        final int period = Math.max(1, this.plugin.getConfig().getInt("pumpkinRain.tickPeriod", 10));
+        int durationS = Math.max(1, this.plugin.getConfig().getInt("pumpkinRain.maxDurationSeconds", 60));
+        final int radius = Math.max(1, this.plugin.getConfig().getInt("pumpkinRain.spawnRadius", 10));
+        final int intensity = Math.max(0, this.plugin.getConfig().getInt("pumpkinRain.intensity", 5));
         final double cfgVol = this.plugin.getConfig().getDouble("pumpkinRain.volume", 0.6);
         final int maxTicks = durationS * 20;
         this.running = true;

@@ -107,14 +107,16 @@ implements Listener {
     }
 
     private void distribute() {
-        List<Map.Entry<UUID, Integer>> topList = SpookySeason.get().stats().getTopTreats(10);
-        if (topList.isEmpty()) {
-            this.plugin.getLogger().info("No treats collected - skipping reward distribution.");
-            return;
-        }
         Map<Integer, Reward> rewardsByRank = this.rewardsByRank();
         if (rewardsByRank.isEmpty()) {
             this.plugin.getLogger().warning("No valid reward entries found in seasonEndRewards.ranks.");
+            return;
+        }
+        // As many places as the configuration rewards, not a fixed top ten.
+        int lowestRank = rewardsByRank.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<Map.Entry<UUID, Integer>> topList = SpookySeason.get().stats().getTopTreats(lowestRank);
+        if (topList.isEmpty()) {
+            this.plugin.getLogger().info("No treats collected - skipping reward distribution.");
             return;
         }
         this.plugin.getLogger().info("Distributing season-end rewards...");
@@ -129,10 +131,10 @@ implements Listener {
             String playerName = PlayerStats.resolveName(uuid);
             Player online = Bukkit.getPlayer(uuid);
             if (online != null && online.isOnline()) {
-                reward.give(this.plugin, online);
+                reward.give(this.plugin, online, () -> this.queue(uuid, reward));
                 online.sendMessage(Lang.get("rewards.received", "rank", String.valueOf(rank)));
             } else {
-                this.queuePending(uuid, reward.toLines());
+                this.queue(uuid, reward);
             }
             this.plugin.getLogger().info("Rank #" + rank + ": " + playerName + " (" + entry.getValue() + " treats)");
             ++rank;
@@ -178,12 +180,22 @@ implements Listener {
         Runnable requeue = () -> this.queuePending(uuid, lines);
         Scheduler.runEntityLater(this.plugin, player, () -> {
             if (player.isOnline()) {
-                reward.give(this.plugin, player);
-                player.sendMessage(Lang.get("rewards.received-late", new String[0]));
+                reward.give(this.plugin, player, requeue);
+                player.sendMessage(Lang.get("rewards.pending-delivered", new String[0]));
             } else {
                 requeue.run();
             }
         }, requeue, 60L);
+    }
+
+    /**
+     * Keeps a reward for the player's next join. Used for anyone who is offline at the time —
+     * season-end rewards as well as raid rewards.
+     */
+    public void queue(UUID uuid, Reward reward) {
+        if (!reward.isEmpty()) {
+            this.queuePending(uuid, reward.toLines());
+        }
     }
 
     /** Takes the pending reward lines and clears them at once, so a relog cannot read them twice. */

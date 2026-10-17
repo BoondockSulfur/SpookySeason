@@ -1,5 +1,6 @@
 package org.example.integration;
 
+import java.util.Locale;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.example.SpookySeason;
@@ -29,7 +30,7 @@ extends PlaceholderExpansion {
     }
 
     public String onRequest(OfflinePlayer player, String params) {
-        return switch (params.toLowerCase()) {
+        return switch (params.toLowerCase(Locale.ROOT)) {
             case "active" -> {
                 if (this.plugin.isSeasonActive()) {
                     yield "Yes";

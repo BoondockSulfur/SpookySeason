@@ -4,7 +4,7 @@ Halloween event plugin for Paper/Folia **1.21.x and 26.x** — trick-or-treating
 moon nights, the Headless Horseman, an undead raid on a target your players have to defend, bat
 swarms, jumpscares and season-end rewards.
 
-Current version: **1.6.0**
+Current version: **1.6.1**
 
 ## Features
 
@@ -164,8 +164,14 @@ more than `maxAlive` at once.
 
 The leader of a wave is the plugin's existing Headless Horseman (`raid.waves.leaderEnabled`,
 `leaderWave`, `0` = the last wave). He is the **only** attacker with a bar of his own — everything
-else has its vanilla bossbar hidden through `raid.waves.hideBossBars`. If a boss happens to be
-standing in the world already, that one is used rather than placing a second.
+else has its vanilla bossbar hidden through `raid.waves.hideBossBars`. The leader is always spawned
+fresh near the target: a Horseman already roaming the world is removed first, and no random
+Horseman spawns while a raid is running. He damages an objective like any attacker
+(`leaderTargetDamage`, `-1` = as much as a regular attacker of that wave) from up to `leaderReach`
+blocks away; in zone or region mode his
+getting inside counts as a breach. Horse and rider are bulky and get caught where other attackers
+pass: after `leaderPhaseSeconds` without getting closer he phases `leaderPhaseDistance` blocks
+towards the target as a ghost rider.
 
 The plugin tracks his health itself, so it is **not** capped at 1024. Technically the entity only
 ever holds one chunk of it: a blow that would kill it is intercepted and the visible health topped
@@ -187,7 +193,8 @@ facing many defenders, 900–3000 is a reasonable starting range.
 
 On **victory** every defender receives `raid.rewards.victory`, on **defeat** `raid.rewards.consolation`:
 items (`MATERIAL:amount`) and experience, given through the inventory API. Defenders are everyone
-who was within `participationRadius` of the target during the raid or hurt or killed an attacker. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
+who was within `participationRadius` of the target during the raid or hurt or killed an attacker.
+Defenders who are offline when the raid ends receive their reward on their next join. After a defeat the place stays visibly marked for `raid.defeat.effect.durationSeconds`
 (particles and darkness, **no** block changes); no new raid can start during that time, and
 `/spookyraid stop` ends it immediately.
 

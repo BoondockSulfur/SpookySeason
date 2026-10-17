@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.6.1
+
+### Added
+- The raid leader phases through obstacles towards the target when stuck (`raid.waves.leaderPhaseSeconds`, `leaderPhaseDistance`).
+
+### Fixed
+- The raid leader never damaged the target (`raid.waves.leaderTargetDamage`, `leaderReach`); in zone or region mode it now counts as a breach.
+- The raid leader kept wandering off the target on its own (vanilla stroll, panic and flee goals, e.g. from wolves).
+- The raid's own archers hit the leader and its horse.
+- Ghost spawns failed on MC 26.x (`INSTANT_EFFECT` requires particle data there).
+- Jumpscares ignored darkness: the light level was read inside the broken block.
+- Deleted reward ranks and zone or name entries came back with every start.
+- A Horseman already roaming the world became the raid leader and could hold up the wave; the leader is now always spawned at the target.
+- Ghosts, the trick mob and the random boss spawn failed on Peaceful.
+- Trick-or-treat was blocked for non-operators in every WorldGuard region; door and villager access now follow the protection plugins.
+- Raid rewards for offline defenders and rewards missed through a logout are kept for the next join.
+- Season-end rewards were limited to ten ranks.
+- `/spooky off` ended a running raid without telling the players.
+- Raid objective labels froze after their chunk was reloaded.
+- Zone names with a dot broke the configuration; removing the selected zone left it selected.
+- Player data files are written atomically.
+
 ## 1.6.0
 
 ### Added

@@ -203,9 +203,26 @@ public class ZoneTarget implements RaidTarget {
         }
         // Through: the attacker is removed, the damage stays on the counter. Leaving it standing
         // would count it twice as soon as it moved again.
+        this.breach(attacker, loc);
+        attacker.remove();
+    }
+
+    @Override
+    public boolean inspectLeader(Entity leader, double damage, double leaderReach) {
+        if (!this.ready || !leader.isValid() || leader.isDead()) {
+            return false;
+        }
+        Location loc = leader.getLocation();
+        if (!this.contains(loc)) {
+            return false;
+        }
+        this.breach(leader, loc);
+        return true;
+    }
+
+    private void breach(Entity attacker, Location loc) {
         attacker.getWorld().spawnParticle(Particle.LARGE_SMOKE, loc.clone().add(0.0, 1.0, 0.0), 20, 0.4, 0.6, 0.4, 0.02);
         attacker.getWorld().playSound(loc, Sound.ENTITY_ZOMBIE_VILLAGER_CONVERTED, SoundCategory.HOSTILE, 1.0f, 0.6f);
-        attacker.remove();
         this.breaches.incrementAndGet();
     }
 

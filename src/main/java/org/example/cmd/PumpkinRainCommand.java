@@ -1,5 +1,6 @@
 package org.example.cmd;
 
+import java.util.Locale;
 import java.util.List;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -23,7 +24,7 @@ TabCompleter {
             sender.sendMessage(Lang.get("command.pumpkinrain.usage", "label", label));
             return true;
         }
-        switch (args[0].toLowerCase()) {
+        switch (args[0].toLowerCase(Locale.ROOT)) {
             case "start": {
                 this.mgr.start(true);
                 sender.sendMessage(Lang.get("command.pumpkinrain.started", new String[0]));
@@ -43,7 +44,7 @@ TabCompleter {
 
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
-            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         }
         return List.of();
     }

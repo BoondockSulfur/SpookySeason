@@ -1,5 +1,6 @@
 package org.example.cmd;
 
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,7 +26,7 @@ TabCompleter {
             sender.sendMessage(Lang.get("command.spooky.usage", "label", label));
             return true;
         }
-        block11 : switch (args[0].toLowerCase()) {
+        block11 : switch (args[0].toLowerCase(Locale.ROOT)) {
             case "on": {
                 if (!this.checkAdmin(sender)) {
                     return true;
@@ -82,7 +83,7 @@ TabCompleter {
                     sender.sendMessage(Lang.get("command.spooky.spawn-usage", "label", label));
                     return true;
                 }
-                switch (args[1].toLowerCase()) {
+                switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "boss": {
                         HalloweenBossManager bossMgr = SpookySeason.get().boss();
                         bossMgr.forceSpawn(p);
@@ -141,10 +142,10 @@ TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
             List<String> subs = sender.hasPermission("spooky.admin") ? ALL_SUBS : PLAYER_SUBS;
-            return subs.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+            return subs.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("spawn") && sender.hasPermission("spooky.admin")) {
-            return SPAWN_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase())).toList();
+            return SPAWN_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         }
         return List.of();
     }

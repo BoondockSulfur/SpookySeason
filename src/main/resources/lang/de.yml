@@ -71,6 +71,7 @@ command:
     zone-save-usage: "§7Nutzung: §e/{label} zone save <Name>"
     zone-need-corners: "§cSetze zuerst beide Ecken mit §e/spookyraid zone pos1 §cund §epos2§c."
     zone-two-worlds: "§cBeide Ecken müssen in derselben Welt liegen."
+    zone-invalid-name: "§cZonennamen dürfen nur Buchstaben, Ziffern, - und _ enthalten (höchstens 32 Zeichen)."
     zone-saved: "§aZone §e{zone} §agespeichert und ausgewählt. Nutze §e/spooky reload §azum Anwenden."
     zone-empty: "§7Noch keine Zonen angelegt."
     zone-list-header: "§6§l── Zonen ──"
@@ -184,7 +185,7 @@ update:
 
 rewards:
   received: "§6§lGlückwunsch! §aDu hast Platz §e#{rank}§a in der Süßes-Rangliste erreicht! Deine Belohnung wurde zugestellt."
-  received-late: "§6§lGlückwunsch! §aDu hast deine Saisonende-Belohnung erhalten!"
+  pending-delivered: "§6§lWillkommen zurück! §aEine Belohnung, die auf dich gewartet hat, wurde zugestellt."
 
 gui:
   status: "§6Saison-Status"

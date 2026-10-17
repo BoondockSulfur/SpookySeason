@@ -15,6 +15,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -161,6 +162,16 @@ public class HauntedNightManager {
         this.showBarFor(showFor, Math.max(0.0, Math.min(1.0, progress)));
         String discId = this.plugin.getConfig().getString("customJukebox.ambientDiscId", "");
         useCjb = !discId.isEmpty() && SpookySeason.get().jukebox().isAvailable();
+        Location playingAt = this.cjbPlaybackLoc;
+        if (useCjb && this.cjbPlaying && playingAt != null) {
+            // A disc without loop ends on its own; without this check the vanilla ambience would
+            // stay muted for the rest of the night.
+            Scheduler.runAtLocation(this.plugin, playingAt, () -> {
+                if (!SpookySeason.get().jukebox().isPlaying(playingAt)) {
+                    this.cjbPlaying = false;
+                }
+            });
+        }
         if (useCjb && !this.cjbPlaying && nightWorld != null) {
             this.cjbPlaybackLoc = nightWorld.getSpawnLocation();
             boolean loop = this.plugin.getConfig().getBoolean("customJukebox.ambientLoop", true);
@@ -198,8 +209,10 @@ public class HauntedNightManager {
     }
 
     private void stopCustomJukebox() {
-        if (this.cjbPlaying && this.cjbPlaybackLoc != null) {
-            SpookySeason.get().jukebox().stopPlayback(this.cjbPlaybackLoc);
+        Location loc = this.cjbPlaybackLoc;
+        if (this.cjbPlaying && loc != null) {
+            // On the region thread of the jukebox location, like the start.
+            Scheduler.runAtLocation(this.plugin, loc, () -> SpookySeason.get().jukebox().stopPlayback(loc));
             this.cjbPlaying = false;
             this.cjbPlaybackLoc = null;
         }
@@ -250,6 +263,8 @@ public class HauntedNightManager {
             // Capture the position once — on Folia the spawn has to stay in the region of the
             // planned location, even if the player keeps walking.
             Location pLoc = p.getLocation();
+            // Vexes are monsters: on Peaceful the server refuses them and the spawn throws.
+            if (pLoc.getWorld().getDifficulty() == Difficulty.PEACEFUL) continue;
             Scheduler.runAtLocation(this.plugin, pLoc, () -> {
                 if (!p.isOnline()) {
                     return;
@@ -267,7 +282,9 @@ public class HauntedNightManager {
                     if (ghost instanceof LivingEntity && (le = (LivingEntity)ghost).getAttribute(Attributes.ATTACK_DAMAGE) != null) {
                         le.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(0.0);
                     }
-                    pLoc.getWorld().spawnParticle(Particle.INSTANT_EFFECT, ghost.getLocation().add(0.0, 1.0, 0.0), 20, 0.5, 0.5, 0.5, 0.01);
+                    // Not INSTANT_EFFECT: from MC 26.x on that one requires Particle.Spell data, which
+                    // does not exist on 1.21.x — WITCH needs no data on either.
+                    pLoc.getWorld().spawnParticle(Particle.WITCH, ghost.getLocation().add(0.0, 1.0, 0.0), 20, 0.5, 0.5, 0.5, 0.01);
                     float vol = (float)SpookySeason.get().prefs().getGhostVol(p.getUniqueId(), this.cfgGhostVol);
                     p.playSound(loc, Sound.ENTITY_PHANTOM_AMBIENT, SoundCategory.AMBIENT, vol, 0.5f);
                     this.activeGhosts.add(ghost);

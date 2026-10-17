@@ -51,6 +51,9 @@ extends JavaPlugin {
     private static SpookySeason instance;
     /** Configuration paths of removed features; cleaned up on every start. */
     private static final List<String> OBSOLETE_CONFIG_PATHS = List.of("seasonEndRewards.commands");
+    /** Sections whose entries the admin may delete; the merge must not bring them back. */
+    private static final List<String> FREE_FORM_CONFIG_PATHS = List.of(
+            "seasonEndRewards.ranks", "raid.waves.names", "raid.target.zones");
     private NamespacedKey entityMarker;
     private NamespacedKey ghostMarker;
     private NamespacedKey raidMarker;
@@ -222,7 +225,8 @@ extends JavaPlugin {
             this.batSwarmManager.stop();
         }
         if (this.raidManager != null) {
-            this.raidManager.stop();
+            // Announced: players in the middle of a raid would otherwise just see it vanish.
+            this.raidManager.stop(true);
         }
         this.removeAllPluginEntities();
     }
@@ -276,7 +280,7 @@ extends JavaPlugin {
 
     private void mergeConfig() {
         File file = new File(this.getDataFolder(), "config.yml");
-        ConfigMerger.merge((Plugin)this, "config.yml", file);
+        ConfigMerger.merge((Plugin)this, "config.yml", file, FREE_FORM_CONFIG_PATHS);
         ConfigMerger.removeObsolete((Plugin)this, file, OBSOLETE_CONFIG_PATHS);
         this.reloadConfig();
     }

@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -106,6 +107,10 @@ implements Listener {
             if (!this.plugin.getConfig().getBoolean("halloweenBoss.enabled", true)) {
                 return;
             }
+            // The raid places its own leader; a random spawn during the raid would be taken for it.
+            if (SpookySeason.get().raid() != null && SpookySeason.get().raid().isRunning()) {
+                return;
+            }
             double chance = this.plugin.getConfig().getDouble("halloweenBoss.spawnChance", 0.005);
             if (ThreadLocalRandom.current().nextDouble() >= chance) {
                 return;
@@ -113,7 +118,9 @@ implements Listener {
             for (World w : Bukkit.getWorlds()) {
                 List<Player> players;
                 long time;
-                if (!SpookySeason.get().isWorldEnabled(w) || (time = w.getTime()) < 13000L || time > 23000L || (players = w.getPlayers()).isEmpty()) continue;
+                // On Peaceful the server refuses the rider, and every attempt would end in a warning.
+                if (!SpookySeason.get().isWorldEnabled(w) || w.getDifficulty() == Difficulty.PEACEFUL
+                        || (time = w.getTime()) < 13000L || time > 23000L || (players = w.getPlayers()).isEmpty()) continue;
                 Player target = players.get(ThreadLocalRandom.current().nextInt(players.size()));
                 if (SpookySeason.get().prefs().isOptedOut(target.getUniqueId())) continue;
                 // Capture the position once — on Folia the spawn has to stay in the region of

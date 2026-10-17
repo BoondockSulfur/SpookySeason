@@ -71,6 +71,7 @@ command:
     zone-save-usage: "§7Usage: §e/{label} zone save <name>"
     zone-need-corners: "§cSet both corners first with §e/spookyraid zone pos1 §cand §epos2§c."
     zone-two-worlds: "§cBoth corners have to be in the same world."
+    zone-invalid-name: "§cZone names may only contain letters, digits, - and _ (at most 32 characters)."
     zone-saved: "§aZone §e{zone} §asaved and selected. Use §e/spooky reload §ato apply."
     zone-empty: "§7No zones defined yet."
     zone-list-header: "§6§l── Zones ──"
@@ -184,7 +185,7 @@ update:
 
 rewards:
   received: "§6§lCongratulations! §aYou placed §e#{rank}§a in the treat leaderboard! Your reward has been delivered."
-  received-late: "§6§lCongratulations! §aYou received your season-end reward!"
+  pending-delivered: "§6§lWelcome back! §aA reward that was waiting for you has been delivered."
 
 gui:
   status: "§6Season Status"

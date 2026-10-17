@@ -16,6 +16,18 @@ public final class ConfigMerger {
     }
 
     public static YamlConfiguration merge(Plugin plugin, String resourcePath, File diskFile) {
+        return ConfigMerger.merge(plugin, resourcePath, diskFile, List.of());
+    }
+
+    /**
+     * Adds missing default keys to the file on disk.
+     *
+     * @param freeForm sections the admin shapes freely (reward ranks, archetype names, ...). Their
+     *                 defaults only serve as an example: they are added only together with their
+     *                 parent section, never entry by entry, so deliberately deleted entries stay
+     *                 deleted — all of them included.
+     */
+    public static YamlConfiguration merge(Plugin plugin, String resourcePath, File diskFile, List<String> freeForm) {
         YamlConfiguration userCfg = YamlConfiguration.loadConfiguration((File)diskFile);
         InputStream defaultStream = plugin.getResource(resourcePath);
         if (defaultStream == null) {
@@ -25,6 +37,7 @@ public final class ConfigMerger {
         boolean changed = false;
         for (String key : defaultCfg.getKeys(true)) {
             if (defaultCfg.isConfigurationSection(key) || userCfg.contains(key, true)) continue;
+            if (ConfigMerger.insideExistingFreeForm(userCfg, key, freeForm)) continue;
             userCfg.set(key, defaultCfg.get(key));
             changed = true;
         }
@@ -38,6 +51,23 @@ public final class ConfigMerger {
             }
         }
         return userCfg;
+    }
+
+    /**
+     * A free-form section counts as present once the section or its parent exists. The parent
+     * matters because deleting every entry leaves a bare {@code ranks:} behind, which YAML reads
+     * as no value at all — the section would otherwise come back in full.
+     */
+    private static boolean insideExistingFreeForm(YamlConfiguration userCfg, String key, List<String> freeForm) {
+        for (String section : freeForm) {
+            if (!key.startsWith(section + ".")) continue;
+            int dot = section.lastIndexOf('.');
+            String parent = dot < 0 ? null : section.substring(0, dot);
+            if (userCfg.contains(section, true) || (parent != null && userCfg.contains(parent, true))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

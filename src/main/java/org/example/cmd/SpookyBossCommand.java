@@ -1,5 +1,6 @@
 package org.example.cmd;
 
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +30,7 @@ TabCompleter {
         }
         SpookySeason plugin = SpookySeason.get();
         FileConfiguration cfg = plugin.getConfig();
-        block9 : switch (args[0].toLowerCase()) {
+        block9 : switch (args[0].toLowerCase(Locale.ROOT)) {
             case "spawn": {
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(Lang.get("command.volume.only-ingame", new String[0]));
@@ -88,7 +89,7 @@ TabCompleter {
                     sender.sendMessage(Lang.get("command.boss.set-usage", "label", label));
                     return true;
                 }
-                String key = args[1].toLowerCase();
+                String key = args[1].toLowerCase(Locale.ROOT);
                 String value = args[2];
                 switch (key) {
                     case "health": {
@@ -145,12 +146,12 @@ TabCompleter {
                     sender.sendMessage(Lang.get("command.boss.armor-usage", "label", label));
                     return true;
                 }
-                String slot = args[1].toLowerCase();
+                String slot = args[1].toLowerCase(Locale.ROOT);
                 if (!ARMOR_SLOTS.contains(slot)) {
                     sender.sendMessage(Lang.get("command.boss.armor-usage", "label", label));
                     return true;
                 }
-                String matName = args[2].equalsIgnoreCase("none") ? "" : args[2].toUpperCase();
+                String matName = args[2].equalsIgnoreCase("none") ? "" : args[2].toUpperCase(Locale.ROOT);
                 if (!matName.isEmpty() && Material.matchMaterial((String)matName) == null) {
                     sender.sendMessage(Lang.get("command.boss.unknown-material", "material", matName));
                     return true;
@@ -170,7 +171,7 @@ TabCompleter {
                 String aKey = ABILITY_KEYS.stream().filter(k -> k.equalsIgnoreCase(args[1])).findFirst().orElse(args[1]);
                 String aVal = args[2];
                 String configPath = "halloweenBoss.abilities." + aKey;
-                switch (aKey.toLowerCase()) {
+                switch (aKey.toLowerCase(Locale.ROOT)) {
                     case "witheronhit": 
                     case "fireresistance": 
                     case "charge": {
@@ -202,7 +203,7 @@ TabCompleter {
                     return true;
                 }
                 ArrayList<String> loot = new ArrayList<String>(cfg.getStringList("halloweenBoss.lootTable"));
-                switch (args[1].toLowerCase()) {
+                switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "list": {
                         if (loot.isEmpty()) {
                             sender.sendMessage(Lang.get("command.boss.loot-empty", new String[0]));
@@ -219,7 +220,7 @@ TabCompleter {
                             sender.sendMessage(Lang.get("command.boss.loot-add-usage", "label", label));
                             return true;
                         }
-                        String entry = args[2].toUpperCase();
+                        String entry = args[2].toUpperCase(Locale.ROOT);
                         String[] entryParts = entry.split(":");
                         if (Material.matchMaterial((String)entryParts[0]) == null) {
                             sender.sendMessage(Lang.get("command.boss.unknown-material", "material", entryParts[0]));
@@ -267,20 +268,20 @@ TabCompleter {
 
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
-            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         }
         if (args.length == 2) {
-            return switch (args[0].toLowerCase()) {
-                case "set" -> SET_KEYS.stream().filter(s -> s.startsWith(args[1].toLowerCase())).toList();
-                case "armor" -> ARMOR_SLOTS.stream().filter(s -> s.startsWith(args[1].toLowerCase())).toList();
-                case "ability" -> ABILITY_KEYS.stream().filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase())).toList();
-                case "loot" -> LOOT_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase())).toList();
+            return switch (args[0].toLowerCase(Locale.ROOT)) {
+                case "set" -> SET_KEYS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+                case "armor" -> ARMOR_SLOTS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+                case "ability" -> ABILITY_KEYS.stream().filter(s -> s.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+                case "loot" -> LOOT_SUBS.stream().filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
                 default -> List.of();
             };
         }
         if (args.length == 3) {
             if (args[0].equalsIgnoreCase("set")) {
-                return switch (args[1].toLowerCase()) {
+                return switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "enabled" -> List.of("true", "false");
                     case "health" -> List.of("50", "100", "200");
                     case "damage" -> List.of("4", "8", "12");
@@ -290,13 +291,13 @@ TabCompleter {
                 };
             }
             if (args[0].equalsIgnoreCase("armor")) {
-                List<String> mats = Arrays.stream(Material.values()).filter(Material::isItem).map(Enum::name).filter(s -> s.startsWith(args[2].toUpperCase())).limit(20L).toList();
+                List<String> mats = Arrays.stream(Material.values()).filter(Material::isItem).map(Enum::name).filter(s -> s.startsWith(args[2].toUpperCase(Locale.ROOT))).limit(20L).toList();
                 ArrayList<String> result = new ArrayList<String>(List.of("none"));
                 result.addAll(mats);
-                return result.stream().filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase())).toList();
+                return result.stream().filter(s -> s.toLowerCase(Locale.ROOT).startsWith(args[2].toLowerCase(Locale.ROOT))).toList();
             }
             if (args[0].equalsIgnoreCase("ability")) {
-                return switch (args[1].toLowerCase()) {
+                return switch (args[1].toLowerCase(Locale.ROOT)) {
                     case "witheronhit", "fireresistance", "charge" -> List.of("true", "false");
                     case "witherdurationticks" -> List.of("60", "100", "200");
                     case "chargeintervalseconds" -> List.of("10", "15", "20", "30");
@@ -304,7 +305,7 @@ TabCompleter {
                 };
             }
             if (args[0].equalsIgnoreCase("loot") && args[1].equalsIgnoreCase("add")) {
-                return Arrays.stream(Material.values()).filter(Material::isItem).map(m -> m.name() + ":1").filter(s -> s.startsWith(args[2].toUpperCase())).limit(20L).toList();
+                return Arrays.stream(Material.values()).filter(Material::isItem).map(m -> m.name() + ":1").filter(s -> s.startsWith(args[2].toUpperCase(Locale.ROOT))).limit(20L).toList();
             }
         }
         return List.of();

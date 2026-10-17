@@ -59,6 +59,10 @@ public final class RaidSettings {
 
     public final boolean leaderEnabled;
     public final int leaderWave;
+    public final double leaderTargetDamage;
+    public final double leaderReach;
+    public final int leaderPhaseSeconds;
+    public final double leaderPhaseDistance;
 
     public final boolean fogEnabled;
     public final int fogIntervalSeconds;
@@ -131,6 +135,11 @@ public final class RaidSettings {
 
         this.leaderEnabled = cfg.getBoolean("raid.waves.leaderEnabled", true);
         this.leaderWave = cfg.getInt("raid.waves.leaderWave", 0);
+        // Negative means "same as a regular attacker of that wave".
+        this.leaderTargetDamage = cfg.getDouble("raid.waves.leaderTargetDamage", -1.0);
+        this.leaderReach = Math.max(1.0, cfg.getDouble("raid.waves.leaderReach", 6.5));
+        this.leaderPhaseSeconds = Math.max(0, cfg.getInt("raid.waves.leaderPhaseSeconds", 6));
+        this.leaderPhaseDistance = Math.max(2.0, cfg.getDouble("raid.waves.leaderPhaseDistance", 8.0));
 
         this.fogEnabled = cfg.getBoolean("raid.fog.enabled", true);
         this.fogIntervalSeconds = Math.max(5, cfg.getInt("raid.fog.intervalSeconds", 45));

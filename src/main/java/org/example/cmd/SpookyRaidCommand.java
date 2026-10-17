@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -33,6 +34,7 @@ TabCompleter {
     private static final List<String> ZONE_SUBS = List.of("pos1", "pos2", "save", "list", "remove");
     // Corner selections per player, in memory only. Concurrent because on Folia each player's
     // command runs on that player's region thread.
+    private static final Pattern ZONE_NAME = Pattern.compile("[a-z0-9_-]{1,32}");
     private static final Map<UUID, Location[]> SELECTION = new ConcurrentHashMap<UUID, Location[]>();
 
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -134,6 +136,11 @@ TabCompleter {
                     break;
                 }
                 String name = args[2].toLowerCase(Locale.ROOT);
+                // The name becomes a config path segment; a dot would split it into nested sections.
+                if (!ZONE_NAME.matcher(name).matches()) {
+                    sender.sendMessage(Lang.get("command.raid.zone-invalid-name", new String[0]));
+                    break;
+                }
                 plugin.getConfig().set("raid.target.zones." + name, ZoneTarget.format(corners[0], corners[1]));
                 plugin.getConfig().set("raid.target.zone.name", name);
                 plugin.getConfig().set("raid.target.mode", "zone");
@@ -165,6 +172,10 @@ TabCompleter {
                     break;
                 }
                 plugin.getConfig().set("raid.target.zones." + name, null);
+                // Otherwise the selection would keep pointing at a zone that no longer exists.
+                if (name.equals(plugin.getConfig().getString("raid.target.zone.name", ""))) {
+                    plugin.getConfig().set("raid.target.zone.name", "");
+                }
                 plugin.saveConfig();
                 sender.sendMessage(Lang.get("command.raid.zone-removed", "zone", name));
                 break;

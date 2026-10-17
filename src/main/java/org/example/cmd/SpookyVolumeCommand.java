@@ -1,5 +1,6 @@
 package org.example.cmd;
 
+import java.util.Locale;
 import java.util.List;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -26,7 +27,7 @@ TabCompleter {
             return true;
         }
         PlayerPrefs prefs = SpookySeason.get().prefs();
-        switch (args[0].toLowerCase()) {
+        switch (args[0].toLowerCase(Locale.ROOT)) {
             case "reset": {
                 prefs.reset(p.getUniqueId());
                 p.sendMessage(Lang.get("command.volume.reset", new String[0]));
@@ -55,7 +56,7 @@ TabCompleter {
                     return true;
                 }
                 v = Math.max(0.0, Math.min(1.0, v));
-                switch (args[0].toLowerCase()) {
+                switch (args[0].toLowerCase(Locale.ROOT)) {
                     case "ambient": {
                         prefs.setAmbientVol(p.getUniqueId(), v);
                         break;
@@ -68,7 +69,7 @@ TabCompleter {
                         prefs.setRainVol(p.getUniqueId(), v);
                     }
                 }
-                p.sendMessage(Lang.get("command.volume.set", "key", args[0].toLowerCase(), "value", String.valueOf(v)));
+                p.sendMessage(Lang.get("command.volume.set", "key", args[0].toLowerCase(Locale.ROOT), "value", String.valueOf(v)));
                 break;
             }
             default: {
@@ -80,7 +81,7 @@ TabCompleter {
 
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
-            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+            return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         }
         return List.of();
     }

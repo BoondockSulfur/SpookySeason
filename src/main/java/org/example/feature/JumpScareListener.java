@@ -42,8 +42,10 @@ implements Listener {
             return;
         }
         int maxLight = this.plugin.getConfig().getInt("jumpScare.darkLightLevel", 4);
-        // Gesamtlicht (Block + Himmel) — nur Blocklicht würde tagsüber im Freien auslösen.
-        if (e.getBlock().getLightLevel() > maxLight) {
+        // Combined light (block + sky) where the player stands. Not on the broken block itself:
+        // inside an opaque block the stored light is always 0, so every stone or dirt block would
+        // count as dark, even at noon in the open.
+        if (p.getEyeLocation().getBlock().getLightLevel() > maxLight) {
             return;
         }
         long now = System.currentTimeMillis();

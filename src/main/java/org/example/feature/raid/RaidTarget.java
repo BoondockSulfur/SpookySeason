@@ -69,6 +69,15 @@ public interface RaidTarget {
      */
     void inspectAttacker(Entity attacker, double waveDamage, boolean ranged, double rangedReach);
 
+    /**
+     * From the wave leader's region thread, once per second. Objectives take damage as from any
+     * attacker. Zones and regions count a breach once the leader gets inside and return
+     * {@code true}: the leader is through and the caller takes it off the field.
+     *
+     * @param leaderReach how far from an objective the leader may stand and still strike it
+     */
+    boolean inspectLeader(Entity leader, double damage, double leaderReach);
+
     /** Where an attacker at {@code from} should head, or null. */
     Location navTarget(Location from);
 
@@ -94,6 +103,13 @@ public interface RaidTarget {
 
     /** Is this entity part of the target itself? Shields it from the general entity cleanup. */
     boolean isTracked(UUID id);
+
+    /**
+     * A tracked entity of the target was loaded again with its chunk. On Paper that is a new
+     * object; the old reference is invalid from then on and has to be swapped for this one.
+     */
+    default void rebind(Entity entity) {
+    }
 
     /** Removes everything the target itself put into the world. */
     void cleanup();

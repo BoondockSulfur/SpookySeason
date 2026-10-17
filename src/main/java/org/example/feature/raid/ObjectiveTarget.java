@@ -457,6 +457,16 @@ public class ObjectiveTarget implements RaidTarget {
 
     @Override
     public void inspectAttacker(Entity attacker, double waveDamage, boolean ranged, double rangedReach) {
+        this.strike(attacker, waveDamage, ranged, rangedReach, ranged);
+    }
+
+    /**
+     * One blow at the nearest living objective, if it is within reach.
+     *
+     * @param standOff whether {@code rangedReach} applies instead of the melee reach
+     * @param shoot    whether a cosmetic arrow is fired
+     */
+    private void strike(Entity attacker, double waveDamage, boolean standOff, double rangedReach, boolean shoot) {
         if (!this.ready || !attacker.isValid() || attacker.isDead()) {
             return;
         }
@@ -465,7 +475,7 @@ public class ObjectiveTarget implements RaidTarget {
         if (objective == null) {
             return;
         }
-        if (!this.withinReach(loc, objective, ranged, rangedReach)) {
+        if (!this.withinReach(loc, objective, standOff, rangedReach)) {
             return;
         }
         objective.damageTaken.add(waveDamage);
@@ -474,7 +484,7 @@ public class ObjectiveTarget implements RaidTarget {
             // visible feedback.
             LivingEntity shooter = (LivingEntity)attacker;
             shooter.swingMainHand();
-            if (ranged) {
+            if (shoot) {
                 this.shootAt(shooter, objective);
             }
         }
@@ -486,6 +496,16 @@ public class ObjectiveTarget implements RaidTarget {
         } else {
             attacker.getWorld().playSound(objective.anchor, Sound.ENTITY_IRON_GOLEM_HURT, SoundCategory.HOSTILE, 0.6f, 1.2f);
         }
+    }
+
+    /**
+     * The leader strikes within {@code leaderReach}: horse and rider are too bulky to close to
+     * melee range. It is never taken off the field.
+     */
+    @Override
+    public boolean inspectLeader(Entity leader, double damage, double leaderReach) {
+        this.strike(leader, damage, true, leaderReach, false);
+        return false;
     }
 
     /** A shooter may stand off; everyone else has to close to melee range. */
@@ -568,6 +588,21 @@ public class ObjectiveTarget implements RaidTarget {
     @Override
     public boolean isTracked(UUID id) {
         return id != null && this.tracked.contains(id);
+    }
+
+    @Override
+    public void rebind(Entity entity) {
+        UUID id = entity.getUniqueId();
+        for (Objective objective : this.objectives) {
+            Entity visual = objective.visual;
+            if (visual != null && visual.getUniqueId().equals(id)) {
+                objective.visual = entity;
+            }
+            Entity label = objective.label;
+            if (label != null && label.getUniqueId().equals(id)) {
+                objective.label = entity;
+            }
+        }
     }
 
     @Override

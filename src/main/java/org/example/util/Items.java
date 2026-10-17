@@ -1,6 +1,7 @@
 package org.example.util;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
@@ -25,8 +26,9 @@ public final class Items {
         }
         String pick = list.get(ThreadLocalRandom.current().nextInt(list.size()));
         String[] parts = pick.split(":");
-        String key = parts[0];
-        int amount = parts.length > 1 ? Items.parseIntSafe(parts[1], 1) : 1;
+        String key = parts[0].trim().toUpperCase(Locale.ROOT);
+        // An amount of 0 or less would produce an empty item.
+        int amount = Math.max(1, parts.length > 1 ? Items.parseIntSafe(parts[1], 1) : 1);
         Material mat = ALIASES.getOrDefault(key, Material.matchMaterial((String)key));
         if (mat == null) {
             mat = Material.COOKIE;

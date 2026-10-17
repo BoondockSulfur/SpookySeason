@@ -3,7 +3,10 @@ package org.example.util;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -63,7 +66,16 @@ public final class YamlSaver {
                 if (parent != null) {
                     parent.mkdirs();
                 }
-                Files.writeString(this.file.toPath(), data, StandardCharsets.UTF_8);
+                // Through a temporary file, so a crash mid-write cannot leave an empty or truncated file.
+                Path target = this.file.toPath();
+                Path temp = target.resolveSibling(target.getFileName() + ".tmp");
+                Files.writeString(temp, data, StandardCharsets.UTF_8);
+                try {
+                    Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                }
+                catch (AtomicMoveNotSupportedException e) {
+                    Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
             catch (IOException e) {
                 this.plugin.getLogger().log(Level.WARNING, "Could not save " + this.file.getName(), e);

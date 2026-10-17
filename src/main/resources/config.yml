@@ -322,6 +322,17 @@ raid:
     # The Headless Horseman leads one wave. 0 = the last one.
     leaderEnabled: true
     leaderWave: 0
+    # Damage the leader deals to an objective per blow. -1 = the same as a regular attacker of
+    # that wave. In zone/region mode the leader getting inside counts as one breach.
+    leaderTargetDamage: -1.0
+    # How far from an objective the leader may stand and still strike it. Horse and rider are too
+    # bulky to close to target.reach; the larger of the two applies.
+    leaderReach: 6.5
+    # Horse and rider are bulky and get caught where other attackers pass. After this many
+    # seconds without getting closer, the leader phases leaderPhaseDistance blocks towards the
+    # target as a ghost rider. 0 turns it off.
+    leaderPhaseSeconds: 6
+    leaderPhaseDistance: 8.0
     # Attackers may never rearrange the world - explosions still hurt players, but no blocks
     # are broken. This is what lets withers join a raid over a village you want to keep.
     noGriefing: true

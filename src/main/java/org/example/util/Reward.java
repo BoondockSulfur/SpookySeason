@@ -76,13 +76,17 @@ public final class Reward {
     /**
      * Gives the reward to the player on that player's region thread. Items that do not fit into
      * the inventory are dropped at the player's feet.
+     *
+     * @param onMissed runs instead if the player is gone by the time the task executes, so the
+     *                 caller can keep the reward for later
      */
-    public void give(Plugin plugin, Player player) {
+    public void give(Plugin plugin, Player player, Runnable onMissed) {
         if (this.isEmpty()) {
             return;
         }
         Scheduler.runOnEntity(plugin, player, () -> {
             if (!player.isOnline()) {
+                onMissed.run();
                 return;
             }
             for (ItemStack item : this.items) {
@@ -94,7 +98,7 @@ public final class Reward {
             if (this.xp > 0) {
                 player.giveExp(this.xp);
             }
-        });
+        }, onMissed);
     }
 
     private static List<ItemStack> parseItems(List<String> lines, Logger log) {

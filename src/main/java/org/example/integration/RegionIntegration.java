@@ -4,9 +4,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Locale;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 public class RegionIntegration {
@@ -39,7 +37,6 @@ public class RegionIntegration {
     private boolean worldGuardRegionLookup;
     private Method gpGetClaimAt;
     private Method gpIsAdminClaim;
-    private Method gpAllowBuild;
     // Set from arbitrary region threads; they only serve the warn-once behaviour.
     private volatile boolean warnedWorldGuard;
     private volatile boolean warnedGriefPrevention;
@@ -104,7 +101,6 @@ public class RegionIntegration {
                 Class<?> claimClass = Class.forName("me.ryanhamshire.GriefPrevention.Claim");
                 this.gpGetClaimAt = dataStoreField.getType().getMethod("getClaimAt", Location.class, Boolean.TYPE, claimClass);
                 this.gpIsAdminClaim = claimClass.getMethod("isAdminClaim");
-                this.gpAllowBuild = claimClass.getMethod("allowBuild", Player.class, Material.class);
                 this.griefPreventionEnabled = true;
                 this.plugin.getLogger().info("GriefPrevention integration enabled.");
             }
@@ -122,16 +118,6 @@ public class RegionIntegration {
             return false;
         }
         return !this.griefPreventionEnabled || this.checkGriefPreventionSpawn(location);
-    }
-
-    public boolean canPlayerInteract(Player player, Location location) {
-        if (!this.plugin.getConfig().getBoolean("regionIntegration.enabled", true)) {
-            return true;
-        }
-        if (this.worldGuardEnabled && !this.checkWorldGuardPlayer(player, location)) {
-            return false;
-        }
-        return !this.griefPreventionEnabled || this.checkGriefPreventionPlayer(player, location);
     }
 
     private boolean checkWorldGuardSpawn(Location location) {
@@ -154,19 +140,6 @@ public class RegionIntegration {
         }
     }
 
-    private boolean checkWorldGuardPlayer(Player player, Location location) {
-        try {
-            if (player.hasPermission("worldguard.region.bypass." + location.getWorld().getName()) || player.isOp()) {
-                return true;
-            }
-            return this.checkWorldGuardSpawn(location);
-        }
-        catch (Exception e) {
-            this.warnWorldGuard(e);
-            return true;
-        }
-    }
-
     private boolean checkGriefPreventionSpawn(Location location) {
         try {
             if (this.plugin.getConfig().getBoolean("regionIntegration.griefPrevention.allowInClaims", false)) {
@@ -178,21 +151,6 @@ public class RegionIntegration {
             }
             return this.plugin.getConfig().getBoolean("regionIntegration.griefPrevention.allowInAdminClaims", false)
                     && ((Boolean)this.gpIsAdminClaim.invoke(claim)).booleanValue();
-        }
-        catch (Exception e) {
-            this.warnGriefPrevention(e);
-            return true;
-        }
-    }
-
-    private boolean checkGriefPreventionPlayer(Player player, Location location) {
-        try {
-            Object claim = this.gpGetClaimAt.invoke(this.gpDataStore, location, false, null);
-            if (claim == null) {
-                return true;
-            }
-            // allowBuild() returns the reason as text; null means "allowed".
-            return this.gpAllowBuild.invoke(claim, player, Material.GRASS_BLOCK) == null;
         }
         catch (Exception e) {
             this.warnGriefPrevention(e);

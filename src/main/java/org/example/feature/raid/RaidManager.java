@@ -61,6 +61,10 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import io.papermc.paper.entity.TeleportFlag;
+import com.destroystokyo.paper.entity.ai.Goal;
+import com.destroystokyo.paper.entity.ai.MobGoals;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -75,6 +79,7 @@ import org.example.api.RaidEndEvent;
 import org.example.api.RaidStartEvent;
 import org.example.api.RaidResult;
 import org.example.feature.HalloweenBossManager;
+import org.example.feature.SeasonRewardManager;
 import org.example.lang.Lang;
 import org.example.util.Attributes;
 import org.example.util.Reward;
@@ -165,6 +170,11 @@ public class RaidManager implements Listener {
     private volatile boolean leaderRequested;
     private boolean leaderSeen;
     private int leaderGrace;
+    // Leader progress for phaseIfStuck; written on the leader's region thread only.
+    private volatile double leaderBestDistance = Double.MAX_VALUE;
+    private volatile int leaderStuckSeconds;
+    // The leader whose wandering goals have been stripped, see calmLeader().
+    private volatile UUID leaderCalmed;
 
     private volatile boolean musicPlaying;
     private Location musicLoc;
@@ -195,7 +205,7 @@ public class RaidManager implements Listener {
         });
     }
 
-    // ── Lebenszyklus ────────────────────────────────────────────────────────
+    // ── Lifecycle ───────────────────────────────────────────────────────────
 
     /**
      * Starts the state machine. A raid already in progress is not aborted: a reload keeps the
@@ -209,13 +219,18 @@ public class RaidManager implements Listener {
         this.tickTask = Scheduler.runTimer(this.plugin, this::tick, 20L, 20L);
     }
 
-    /** Aborts everything and cleans up — for onDisable and {@code /spooky off}. */
+    /** Aborts everything and cleans up silently — for onDisable. */
     public void stop() {
+        this.stop(false);
+    }
+
+    /** Aborts everything and cleans up; {@code announce} tells the players near the target. */
+    public void stop(boolean announce) {
         if (this.tickTask != null) {
             this.tickTask.cancel();
             this.tickTask = null;
         }
-        this.abort(false);
+        this.abort(announce);
         this.stateSaver.flushIfPending();
     }
 
@@ -248,7 +263,15 @@ public class RaidManager implements Listener {
         return current != null && current.isTracked(id);
     }
 
-    // ── Start / Abbruch ─────────────────────────────────────────────────────
+    /** A tracked entity came back with its chunk; the target swaps in the fresh reference. */
+    public void rebind(Entity entity) {
+        RaidTarget current = this.target;
+        if (current != null && current.isTracked(entity.getUniqueId())) {
+            current.rebind(entity);
+        }
+    }
+
+    // ── Start / abort ───────────────────────────────────────────────────────
 
     /**
      * Starts a raid.
@@ -366,7 +389,7 @@ public class RaidManager implements Listener {
         return ObjectiveTarget.from(this.plugin, cfg.getConfigurationSection("raid.target.objective"));
     }
 
-    // ── Zustandsautomat ─────────────────────────────────────────────────────
+    // ── State machine ───────────────────────────────────────────────────────
 
     private void tick() {
         try {
@@ -508,7 +531,7 @@ public class RaidManager implements Listener {
         this.abort(false);
     }
 
-    // ── Wellen ──────────────────────────────────────────────────────────────
+    // ── Waves ───────────────────────────────────────────────────────────────
 
     private void beginWave(int wave) {
         RaidSettings cfg = this.settings;
@@ -524,6 +547,8 @@ public class RaidManager implements Listener {
         this.leaderRequested = false;
         this.leaderSeen = false;
         this.leaderGrace = 0;
+        this.leaderBestDistance = Double.MAX_VALUE;
+        this.leaderStuckSeconds = 0;
         this.remainingSpawns.set(this.waveQuota);
         this.spawnsInFlight.set(0);
         this.spawnAttempts.set(0);
@@ -596,13 +621,10 @@ public class RaidManager implements Listener {
             return;
         }
         this.leaderRequested = true;
-        if (SpookySeason.get().boss().isActive()) {
-            // A boss is already standing in the world (auto spawn or /spookyboss spawn) — that
-            // one counts as the leader instead of clearing it away and placing a new one.
-            this.leaderSeen = true;
-        } else {
-            SpookySeason.get().boss().forceSpawnAt(this.ringLocation(center, cfg.spawnRadiusMin, cfg.spawnRadiusMax));
-        }
+        // Always a leader of its own, placed at the target. A boss already roaming the world
+        // (auto spawn or /spookyboss spawn) may stand anywhere, even in another world, and would
+        // hold up the wave until it dies or the night ends — forceSpawnAt removes it first.
+        SpookySeason.get().boss().forceSpawnAt(this.ringLocation(center, cfg.spawnRadiusMin, cfg.spawnRadiusMax));
         this.broadcast("raid.leader", new String[0]);
         this.showTitle("raid.title.leader", "raid.subtitle.leader", Sound.ENTITY_WITHER_SPAWN, 0.8f);
     }
@@ -620,7 +642,7 @@ public class RaidManager implements Listener {
         this.leaderSeen = false;
     }
 
-    // ── Angreifer ───────────────────────────────────────────────────────────
+    // ── Attackers ───────────────────────────────────────────────────────────
 
     private Location ringLocation(Location center, double min, double max) {
         double angle = ThreadLocalRandom.current().nextDouble(Math.PI * 2.0);
@@ -959,12 +981,28 @@ public class RaidManager implements Listener {
                 return;
             }
             Location from = rider.getLocation();
-            if (current.holdsPosition(from, false, cfg.rangedReach)) {
+            // The leader strikes the target like any attacker; a zone or region it gets into
+            // counts as breached and the leader leaves the field.
+            double leaderDamage = cfg.leaderTargetDamage >= 0.0 ? cfg.leaderTargetDamage : cfg.targetDamageForWave(this.waveIndex);
+            if (current.inspectLeader(rider, leaderDamage, cfg.leaderReach)) {
+                boss.despawnBoss();
+                return;
+            }
+            // Treated as a stand-off attacker with leaderReach, so it stops where it can strike.
+            if (current.holdsPosition(from, true, cfg.leaderReach)) {
+                this.leaderStuckSeconds = 0;
                 return;
             }
             Location nav = current.navTarget(from);
             Mob carrier = rider.getVehicle() instanceof Mob vehicle ? vehicle : rider;
+            this.calmLeader(rider, carrier, cfg.debug);
             this.unstick(cfg, carrier, carrier.getLocation(), nav);
+            if (rider.getTarget() instanceof Player) {
+                // Fighting a defender is not being stuck.
+                this.leaderStuckSeconds = 0;
+            } else {
+                this.phaseIfStuck(cfg, carrier, from, nav);
+            }
             if (!retargetNow || nav == null) {
                 return;
             }
@@ -993,6 +1031,95 @@ public class RaidManager implements Listener {
                         + " target=" + (rider.getTarget() == null ? "none" : rider.getTarget().getType().toString())
                         + " pathing=" + carrier.getPathfinder().hasPath());
             }
+        });
+    }
+
+    /**
+     * Strips the vanilla goals that move horse and rider on their own — strolling, panicking, the
+     * untamed horse's bucking, and fleeing (skeletons run from wolves, a defender's dog included). Measured on the test server: within reach of the target, where
+     * the plugin deliberately sends no path, the leader kept walking off and was pulled back each
+     * time. Combat goals stay, so the rider still fights defenders.
+     *
+     * <p>Once per leader; runs on the leader's region thread. The goal keys are matched by name
+     * because the vanilla goal constants differ between versions.
+     */
+    private void calmLeader(Mob rider, Mob carrier, boolean debug) {
+        if (rider.getUniqueId().equals(this.leaderCalmed)) {
+            return;
+        }
+        this.leaderCalmed = rider.getUniqueId();
+        MobGoals goals = Bukkit.getMobGoals();
+        for (Mob mob : carrier == rider ? List.of(rider) : List.of(rider, carrier)) {
+            for (Goal<Mob> goal : new ArrayList<Goal<Mob>>(goals.getAllGoals(mob))) {
+                String key = goal.getKey().getNamespacedKey().getKey();
+                if (key.contains("stroll") || key.contains("panic") || key.contains("crazy")
+                        || key.contains("avoid") || key.contains("flee")) {
+                    goals.removeGoal(mob, goal);
+                    if (debug) {
+                        this.plugin.getLogger().info("[raid-debug] LEADER " + mob.getType() + " goal removed: " + key);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Moves a leader that has been stuck for {@code leaderPhaseSeconds} a stretch towards the
+     * target, as a ghost rider passing through whatever is in the way.
+     *
+     * <p>Horse and rider are far bulkier than the other attackers and get caught on walls and in
+     * gaps the rest walk through or around; the unstick push alone only presses them against the
+     * obstacle. Progress means getting at least one block closer than ever before this wave.
+     * Runs on the leader's region thread.
+     */
+    private void phaseIfStuck(RaidSettings cfg, Mob carrier, Location from, Location nav) {
+        if (cfg.leaderPhaseSeconds <= 0 || nav == null || !nav.getWorld().equals(from.getWorld())) {
+            return;
+        }
+        double distance = from.distance(nav);
+        if (distance < this.leaderBestDistance - 1.0) {
+            this.leaderBestDistance = distance;
+            this.leaderStuckSeconds = 0;
+            return;
+        }
+        if (++this.leaderStuckSeconds < cfg.leaderPhaseSeconds) {
+            return;
+        }
+        this.leaderStuckSeconds = 0;
+        // Never onto the target itself, only up to the edge of its reach.
+        double step = Math.min(cfg.leaderPhaseDistance, distance - 3.0);
+        Vector direction = nav.toVector().subtract(from.toVector()).setY(0.0);
+        if (step < 1.0 || direction.lengthSquared() < 1.0E-4) {
+            return;
+        }
+        Location candidate = from.clone().add(direction.normalize().multiply(step));
+        // The landing spot is read on its own region thread, the teleport runs on the carrier's.
+        Scheduler.runAtLocation(this.plugin, candidate, () -> {
+            Location ground = RaidManager.groundAt(candidate);
+            if (ground == null) {
+                return;
+            }
+            ground.setYaw(from.getYaw());
+            Scheduler.runOnEntity(this.plugin, carrier, () -> {
+                if (!carrier.isValid() || carrier.isDead()) {
+                    return;
+                }
+                Location start = carrier.getLocation();
+                start.getWorld().spawnParticle(Particle.SOUL, start.clone().add(0.0, 1.2, 0.0), 30, 0.6, 1.0, 0.6, 0.03);
+                start.getWorld().playSound(start, Sound.ENTITY_ENDERMAN_TELEPORT, SoundCategory.HOSTILE, 1.0f, 0.6f);
+                carrier.teleportAsync(ground, PlayerTeleportEvent.TeleportCause.PLUGIN,
+                        TeleportFlag.EntityState.RETAIN_PASSENGERS).thenAccept(moved -> {
+                    if (!moved) {
+                        return;
+                    }
+                    Scheduler.runAtLocation(this.plugin, ground, () -> ground.getWorld().spawnParticle(
+                            Particle.SOUL, ground.clone().add(0.0, 1.2, 0.0), 30, 0.6, 1.0, 0.6, 0.03));
+                });
+                if (cfg.debug) {
+                    this.plugin.getLogger().info("[raid-debug] LEADER stuck - phasing " + Math.round(step)
+                            + " blocks to " + ground.getBlockX() + "/" + ground.getBlockY() + "/" + ground.getBlockZ());
+                }
+            });
         });
     }
 
@@ -1059,7 +1186,7 @@ public class RaidManager implements Listener {
         this.spawnsInFlight.set(0);
     }
 
-    // ── Ausgang ─────────────────────────────────────────────────────────────
+    // ── Outcome ─────────────────────────────────────────────────────────────
 
     private void victory() {
         RaidSettings cfg = this.settings;
@@ -1169,19 +1296,26 @@ public class RaidManager implements Listener {
         }, 1L);
     }
 
-    /** Hands the reward to every defender who is online; items go through the inventory API. */
+    /**
+     * Hands the reward to every defender; items go through the inventory API. Defenders who have
+     * logged out in the meantime receive it on their next join.
+     */
     private void giveRewards(Reward reward) {
         if (reward.isEmpty() || this.participants.isEmpty()) {
             return;
         }
+        SeasonRewardManager pending = SpookySeason.get().rewards();
         for (UUID id : Set.copyOf(this.participants)) {
             Player p = Bukkit.getPlayer(id);
-            if (p == null || !p.isOnline()) continue;
-            reward.give(this.plugin, p);
+            if (p == null || !p.isOnline()) {
+                pending.queue(id, reward);
+                continue;
+            }
+            reward.give(this.plugin, p, () -> pending.queue(id, reward));
         }
     }
 
-    // ── Stimmung ────────────────────────────────────────────────────────────
+    // ── Atmosphere ──────────────────────────────────────────────────────────
 
     private void fogPulse(RaidSettings cfg, Location center) {
         if (!cfg.fogEnabled || center == null) {
@@ -1216,14 +1350,16 @@ public class RaidManager implements Listener {
     }
 
     private void stopMusic() {
-        if (this.musicPlaying && this.musicLoc != null) {
-            SpookySeason.get().jukebox().stopPlayback(this.musicLoc);
+        Location loc = this.musicLoc;
+        if (this.musicPlaying && loc != null) {
+            // On the region thread of the jukebox location, like the start.
+            Scheduler.runAtLocation(this.plugin, loc, () -> SpookySeason.get().jukebox().stopPlayback(loc));
         }
         this.musicPlaying = false;
         this.musicLoc = null;
     }
 
-    // ── Anzeige ─────────────────────────────────────────────────────────────
+    // ── Display ─────────────────────────────────────────────────────────────
 
     private void updateBars(RaidSettings cfg, RaidTarget current) {
         Location center = current.center();
@@ -1373,7 +1509,7 @@ public class RaidManager implements Listener {
         return lines;
     }
 
-    // ── Zeitplan ────────────────────────────────────────────────────────────
+    // ── Schedule ────────────────────────────────────────────────────────────
 
     private void maybeAutoStart() {
         FileConfiguration cfg = this.plugin.getConfig();
@@ -1524,6 +1660,11 @@ public class RaidManager implements Listener {
         e.setCancelled(true);
     }
 
+    private boolean isLeaderPart(UUID id) {
+        HalloweenBossManager boss = SpookySeason.get().boss();
+        return this.leaderRequested && boss != null && (id.equals(boss.bossId()) || id.equals(boss.horseId()));
+    }
+
     private boolean isLeader(UUID id) {
         HalloweenBossManager boss = SpookySeason.get().boss();
         return this.leaderRequested && boss != null && id.equals(boss.bossId());
@@ -1539,7 +1680,10 @@ public class RaidManager implements Listener {
         if (cfg == null || cfg.friendlyFire) {
             return;
         }
-        if (!this.attackerIds.contains(e.getEntity().getUniqueId())) {
+        UUID victim = e.getEntity().getUniqueId();
+        // The leader and its horse are on the attackers' side too: stray arrows from the raid's
+        // archers otherwise knock the leader about at the target.
+        if (!this.attackerIds.contains(victim) && !this.isLeaderPart(victim)) {
             return;
         }
         Entity damager = RaidManager.resolveSource(e.getDamager());

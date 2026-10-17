@@ -27,7 +27,10 @@ implements Listener {
             if (this.plugin.boss() != null && this.plugin.boss().isTracked(entity.getUniqueId())) continue;
             // A running raid's attackers and target are tracked and must not vanish mid-assault
             // just because their chunk was reloaded.
-            if (this.plugin.raid() != null && this.plugin.raid().isTracked(entity.getUniqueId())) continue;
+            if (this.plugin.raid() != null && this.plugin.raid().isTracked(entity.getUniqueId())) {
+                this.plugin.raid().rebind(entity);
+                continue;
+            }
             // Remove one tick later: deleting entities in the middle of the load is delicate —
             // the server is busy with this very list at that moment.
             Scheduler.runEntityLater(this.plugin, entity, () -> {

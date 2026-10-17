@@ -11,6 +11,7 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -20,12 +21,14 @@ import org.bukkit.block.Block;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Door;
+import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -50,7 +53,10 @@ implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    // HIGH and ignoreCancelled: protection plugins (WorldGuard, GriefPrevention, lock plugins)
+    // decide at lower priorities who may use a door or a villager. Region members keep access,
+    // strangers do not — exactly as for the door or the trade itself.
+    @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
     public void onDoorClick(PlayerInteractEvent e) {
         BlockData blockData;
         if (!this.plugin.isSeasonActive()) {
@@ -79,9 +85,6 @@ implements Listener {
         if (this.plugin.prefs().isOptedOut(p.getUniqueId())) {
             return;
         }
-        if (!this.plugin.regions().canPlayerInteract(p, b.getLocation())) {
-            return;
-        }
         String key = this.doorCooldownKey(p.getUniqueId(), b, door);
         if (!this.checkCooldown(p, key, true)) {
             return;
@@ -89,7 +92,7 @@ implements Listener {
         this.rollTrickOrTreat(p);
     }
 
-    @EventHandler
+    @EventHandler(priority=EventPriority.HIGH, ignoreCancelled=true)
     public void onVillagerClick(PlayerInteractEntityEvent e) {
         if (!this.plugin.isSeasonActive()) {
             return;
@@ -117,9 +120,6 @@ implements Listener {
             return;
         }
         if (this.plugin.prefs().isOptedOut(p.getUniqueId())) {
-            return;
-        }
-        if (!this.plugin.regions().canPlayerInteract(p, villager.getLocation())) {
             return;
         }
         String key = this.villagerCooldownKey(p.getUniqueId(), villager);
@@ -185,6 +185,16 @@ implements Listener {
                 this.plugin.getLogger().warning("Invalid trickOrTreat.meanMobs entry: " + name);
             }
         }
+        if (!type.isSpawnable() || !type.isAlive()) {
+            this.plugin.getLogger().warning("trickOrTreat.meanMobs entry cannot be spawned: " + type);
+            type = EntityType.WITCH;
+        }
+        // On Peaceful the server refuses monsters and the spawn throws; the trick then stays
+        // lightning, sound and slowness.
+        Class<? extends Entity> entityClass = type.getEntityClass();
+        if (w.getDifficulty() == Difficulty.PEACEFUL && entityClass != null && Enemy.class.isAssignableFrom(entityClass)) {
+            return;
+        }
         Location spawnLoc = p.getLocation().add(0.0, 0.0, 1.0);
         if (!this.plugin.regions().canSpawnAt(spawnLoc)) {
             return;
@@ -199,7 +209,8 @@ implements Listener {
             LivingEntity le = (LivingEntity)mob;
             le.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 20 * buff, 0));
         }
-        w.spawnParticle(Particle.INSTANT_EFFECT, mob.getLocation().add(0.0, 1.0, 0.0), 16, 0.4, 0.6, 0.4, 0.01);
+        // Not INSTANT_EFFECT: from MC 26.x on that one requires Particle.Spell data.
+        w.spawnParticle(Particle.WITCH, mob.getLocation().add(0.0, 1.0, 0.0), 16, 0.4, 0.6, 0.4, 0.01);
         Scheduler.runEntityLater((Plugin)this.plugin, mob, () -> {
             if (mob.isValid() && !mob.isDead()) {
                 mob.remove();

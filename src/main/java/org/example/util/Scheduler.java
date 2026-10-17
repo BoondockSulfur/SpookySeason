@@ -111,6 +111,15 @@ public final class Scheduler {
      * has moved into a different region since the call.
      */
     public static void runOnEntity(Plugin plugin, Entity entity, Runnable task) {
+        Scheduler.runOnEntity(plugin, entity, task, () -> {});
+    }
+
+    /**
+     * Like {@link #runOnEntity(Plugin, Entity, Runnable)}, but with a callback for the case where
+     * Folia drops the task because the entity is gone (a logout, for instance). On Paper the task
+     * runs inline and the caller checks the entity itself.
+     */
+    public static void runOnEntity(Plugin plugin, Entity entity, Runnable task, Runnable onRetired) {
         // getScheduler is resolved on the Entity interface, not on entity.getClass(): the declared
         // return type is the public EntityScheduler interface and one cache entry serves every
         // entity type.
@@ -120,9 +129,12 @@ public final class Scheduler {
                 Object entityScheduler = getScheduler.invoke((Object)entity);
                 Class<?> schedulerType = getScheduler.getReturnType();
                 Consumer<Object> consumer = t -> task.run();
-                Runnable retired = () -> {};
                 Method method = Scheduler.cachedMethod(schedulerType, "run", 3);
-                method.invoke(entityScheduler, plugin, consumer, retired);
+                Object handle = method.invoke(entityScheduler, plugin, consumer, onRetired);
+                if (handle == null) {
+                    // The entity was already gone; Folia then does not call the retired callback.
+                    onRetired.run();
+                }
             }
             catch (Exception e) {
                 if (!plugin.isEnabled()) {
